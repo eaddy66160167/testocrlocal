@@ -1,9 +1,6 @@
 import asyncio
-import io
-from hashlib import sha256
 
 import pytest
-from PIL import Image
 from pydantic import SecretStr
 from sqlalchemy import select
 
@@ -15,35 +12,27 @@ from app.services.image_service import ImageService
 from tests.test_gateway_and_fairness import config, multipart
 
 
-@pytest.mark.parametrize("roi", [None, {"x1": 40, "y1": 30, "x2": 270, "y2": 150}, {"ignored": "invalid ROI"}])
-def test_full_preserves_source_without_crop(settings, png, gateway, monkeypatch, roi):
-    original = ImageService.open(png)
-    def forbidden(*args, **kwargs):
-        pytest.fail("Hutch Full must never crop locally")
-    monkeypatch.setattr(ImageService, "crop", forbidden)
-    monkeypatch.setattr(ImageService, "canonical_crop", forbidden)
-    adapter = HutchFullPipelineAdapter(config("hutch_full"), settings)
-    adapter.config.query_params = {"roi": "obsolete", "engine": "custom"}
-    source = adapter.prepare_input(original, None, roi)
-    assert source.png == ImageService.encode_png(original)
-    assert Image.open(io.BytesIO(source.png)).tobytes() == original.tobytes()
-    assert (source.width, source.height) == original.size
-    assert not hasattr(source, "roi")
-    assert source.sha256 == sha256(source.png).hexdigest()
-    assert adapter.model_parameters() == {"text_det_unclip_ratio": 1.7, "text_det_thresh": 0.25, "text_det_box_thresh": 0.6}
-    result = asyncio.run(adapter.run(original_image=original, roi=roi))
-    request = gateway[1][-1]
-    fields = multipart(request)
-    assert fields["image"] == source.png
-    assert set(fields) == {"image", "text_det_unclip_ratio", "text_det_thresh", "text_det_box_thresh"}
-    assert request.url.params["engine"] == "paddle"
-    assert set(request.url.params) == {"engine"}
-    assert adapter.diagnostics["roi"] is None
-    assert result.boxes
-    assert result.boxes[0]["polygon"] == result.boxes[0]["crop_polygon"]
-    assert adapter.diagnostics["crop_sha256"] is None
-    assert adapter.diagnostics["input_sha256"] == source.sha256
-    assert adapter.diagnostics["crop_stage"] == "full_image"
+@pytest.mark.parametrize("roi", [None, {"x1": 40, "y1": 30, "x2": 270, "y2": 150}, {"x1": 0, "y1": 0, "x2": 300, "y2": 200}])
+def test_full_preserves_canonical_input_without_recropping(settings, png, gateway, monkeypatch, roi):
+    with ImageService.open(png) as original:
+        crop = ImageService(settings).canonical_crop(original, roi)
+        def forbidden(*args, **kwargs):
+            pytest.fail("Adapter must reuse canonical crop bytes")
+        monkeypatch.setattr(ImageService, "canonical_crop", forbidden)
+        adapter = HutchFullPipelineAdapter(config("hutch_full"), settings)
+        adapter.config.query_params = {"roi": "obsolete", "engine": "custom"}
+        assert adapter.prepare_input(original, crop, roi) is crop
+        result = asyncio.run(adapter.run(original_image=original, cropped_image=crop, roi=roi))
+        request = gateway[1][-1]
+        fields = multipart(request)
+        assert fields["image"] == crop.png
+        assert set(fields) == {"image", "text_det_unclip_ratio", "text_det_thresh", "text_det_box_thresh"}
+        assert adapter.model_parameters() == {"text_det_unclip_ratio": 1.7, "text_det_thresh": 0.25, "text_det_box_thresh": 0.6}
+        assert dict(request.url.params) == {"engine": "paddle"}
+        assert result.diagnostics["roi"] == roi
+        assert result.diagnostics["crop_sha256"] == crop.sha256
+        assert result.diagnostics["input_sha256"] == crop.sha256
+        assert result.diagnostics["crop_stage"] == "app_crop"
 
 
 def test_missing_key_has_no_fake_fallback(client, case, settings, gateway):

@@ -1,3 +1,4 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { t } from "../lib/i18n/th";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
@@ -10,7 +11,7 @@ for (const imageFile of [
   "public/sample-document.png",
   "tests/fixtures/sample-document.jpg",
 ]) {
-  test(`upload ${imageFile}, original-coordinate ROI, three upstream results including full image, ground truth, saved detail and dashboards`, async ({
+  test(`upload ${imageFile}, original-coordinate ROI, all configured pipelines with canonical crops, ground truth, saved detail and dashboards`, async ({
     page,
     request,
   }) => {
@@ -28,9 +29,9 @@ for (const imageFile of [
         ).ok(),
       ).toBeTruthy();
     }
-    await page.goto("/");
+    await openLegacyWorkspace(page);
     await expect(
-      page.getByRole("button", { name: t("Upload document"), exact: true }),
+      page.getByRole("button", { name: "เปลี่ยนเอกสาร", exact: true }),
     ).toBeEnabled();
     await page
       .locator('input[type="file"]')
@@ -115,7 +116,7 @@ for (const imageFile of [
       result.runs.find(
         (run: { pipeline_id: string }) => run.pipeline_id === "hutch_full",
       ).crop_stage,
-    ).toBe("manual_roi");
+    ).toBe("app_crop");
     await expect(page.getByTestId("result-text-mint")).toHaveText(
       "บริษัท ซีดีจี จำกัด",
     );
@@ -297,11 +298,11 @@ for (const imageFile of [
   });
 }
 
-test("mobile workspace fits the viewport and upload remains usable", async ({
+test("mobile Global workspace fits the viewport and upload remains usable", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto('/');
   await expect(
     page.getByRole("button", { name: t("Upload document"), exact: true }),
   ).toBeEnabled();
@@ -314,7 +315,7 @@ test("mobile workspace fits the viewport and upload remains usable", async ({
   });
 });
 
-test("ROI move and resize, selectable Auto ROI, and failure recovery", async ({
+test("legacy compatibility: ROI move and resize, selectable Auto ROI, and failure recovery", async ({
   page,
   request,
 }) => {
@@ -440,9 +441,9 @@ test("ROI move and resize, selectable Auto ROI, and failure recovery", async ({
     expect(run.input_width).toBe(finalROI[2] - finalROI[0]);
   }
   expect(result.runs[0].input_sha256).toBe(result.runs[1].input_sha256);
-  expect(result.runs[2].input_width).toBe(1000);
-  expect(result.runs[2].input_height).toBe(1320);
-  expect(result.runs[2].roi).toBeNull();
+  expect(result.runs[2].input_width).toBe(result.runs[0].input_width);
+  expect(result.runs[2].input_height).toBe(result.runs[0].input_height);
+  expect(result.runs[2].roi).toEqual(result.runs[0].roi);
   await expect(page.getByTestId("result-text-mint")).toBeVisible();
   const bbox = result.runs[0].boxes[0].bbox;
   const textPoint = await point(
@@ -457,7 +458,7 @@ test("ROI move and resize, selectable Auto ROI, and failure recovery", async ({
   ).toHaveAttribute("aria-pressed", "true");
 });
 
-test("settings save and upstream connection test", async ({ page }) => {
+test("legacy compatibility: settings save and upstream connection test", async ({ page }) => {
   await page.goto("/settings/pipelines");
   const card = page
     .locator("section")

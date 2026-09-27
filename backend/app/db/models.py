@@ -75,6 +75,11 @@ class TestCase(Base):
     roi: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
     # Legacy records keep the old full-page Hutch Full behavior; source is never guessed.
     roi_source: Mapped[str] = mapped_column(String(10), default="none", server_default="none")
+    workflow: Mapped[str] = mapped_column(String(20), default="legacy", server_default="legacy")
+    layout_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    evaluation_mode: Mapped[str] = mapped_column(String(20), default="per_field", server_default="per_field")
+    document_gt_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    layout_locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ground_truth_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     ground_truth_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="draft")
@@ -90,6 +95,26 @@ class TestCase(Base):
         cascade="all, delete-orphan",
         order_by="PipelineRun.created_at",
     )
+    global_fields: Mapped[list["GlobalField"]] = relationship(
+        back_populates="test_case", lazy="selectin", cascade="all, delete-orphan",
+        order_by="GlobalField.field_index",
+    )
+
+
+class GlobalField(Base):
+    __tablename__ = "global_fields"
+    __table_args__ = (UniqueConstraint("test_case_id", "field_index", name="uq_global_fields_case_index"),)
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
+    test_case_id: Mapped[str] = mapped_column(ForeignKey("test_cases.id", ondelete="CASCADE"), index=True)
+    field_index: Mapped[int] = mapped_column(Integer)
+    roi: Mapped[dict] = mapped_column(JSON_TYPE)
+    source: Mapped[str] = mapped_column(String(10))
+    ground_truth_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ground_truth_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    test_case: Mapped[TestCase] = relationship(back_populates="global_fields")
 
 
 class PipelineRun(Base):
@@ -107,6 +132,7 @@ class PipelineRun(Base):
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     processing_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     boxes: Mapped[list] = mapped_column(JSON_TYPE, default=list)
+    document_evaluation: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
     raw_response: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -146,6 +172,11 @@ class OCRField(Base):
     __table_args__ = (UniqueConstraint("pipeline_run_id", "field_index", name="uq_ocr_fields_run_index"),)
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
     pipeline_run_id: Mapped[str] = mapped_column(ForeignKey("pipeline_runs.id", ondelete="CASCADE"), index=True)
+    global_field_id: Mapped[str | None] = mapped_column(
+        ForeignKey("global_fields.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), default="success", server_default="success")
+    diagnostics: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
     field_index: Mapped[int] = mapped_column(Integer)
     geometry: Mapped[dict] = mapped_column(JSON_TYPE)
     ocr_text: Mapped[str] = mapped_column(Text)

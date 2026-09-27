@@ -1,12 +1,13 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { t } from "../lib/i18n/th";
 
 const backend = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
-test("Benchmark appears dynamically and flows through ROI, saved metrics, errors and comparison", async ({ page, request }) => {
+test("legacy compatibility: Benchmark appears dynamically and flows through ROI, saved metrics, errors and comparison", async ({ page, request }) => {
   await request.put(`${backend}/api/pipelines/benchmark`, { data: { enabled: true } });
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("public/sample-document.png"));
   await expect(page.getByTestId("document-viewer")).toBeVisible();
   await page.getByRole("button", { name: t("Auto Detect"), exact: true }).click();

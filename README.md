@@ -26,9 +26,16 @@ The browser selects source coordinates. FastAPI validates them, creates determin
 
 ## Main Application Flow
 
-Upload image/PDF → select page → Auto ROI / Manual ROI → confirm region → select pipelines → OCR → Field-level GT → Check / Confirm → CER/WER/Exact Match → Error Analysis → History / Matrix / Analytics → Dataset export.
+The workflow has four route-backed pages:
 
-Results save automatically. One pipeline failure does not cancel others. Changing ROI after OCR creates another case to preserve historical predictions.
+1. **Upload Document** (`/`): upload image/PDF, preview, select PDF page, then Next.
+2. **Global Layout** (`/workflow/{id}/layout`): one Auto Layout click displays all returned usable boxes as editable drafts. Manual boxes coexist. Confirm ROI persists canonical order and locks the layout.
+3. **Select Pipelines / Run OCR** (`/workflow/{id}/pipelines`): read-only layout, pipeline selection, one Run OCR action. Successful results survive other pipeline failures.
+4. **Ground Truth & Evaluation** (`/workflow/{id}/ground-truth`): Whole/Sub editors and results together. One Calculate evaluates every populated selected scope, irrespective of the visible tab. Cards separate Extracted Text, Metrics and collapsed Error Analysis.
+
+Whole/Sub drafts survive toggles. Both evaluations persist when both contain GT; empty GT is not evaluated. Calculate stays on page 4. The old `/workflow/{id}/evaluation` route redirects there. History restores saved results; legacy records keep their compatibility viewer. Editing a layout after OCR creates a new case and preserves old runs.
+
+Upload and layout preparation never run OCR. A layout becomes immutable once OCR starts. Stable Global Field UUIDs map all pipeline predictions to the same regions. Historical cases remain available in the legacy viewer.
 
 ## OCR Pipelines
 
@@ -46,13 +53,7 @@ Both Hutch adapters explicitly send `text_det_unclip_ratio=1.7`, `text_det_thres
 
 ### Hutch Full
 
-Same Paddle endpoint, with explicit source semantics:
-
-- **Auto ROI:** full selected page/image, ignoring the Auto crop.
-- **Manual ROI:** original + ROI enter the adapter; crop happens inside it.
-- **None / historical unknown source:** full selected page/image.
-
-ROI coordinates never replace the image request. Manual PNG/hash matches crop-based adapters; Auto input dimensions/hash describe the full image.
+Same Paddle endpoint and thresholds as Hutch Crop. Every new run receives the same prebuilt canonical ROI PNG (`crop_stage=app_crop`) as the other adapters, for both Auto and Manual regions. Global Layout executes this per field. Stored historical full-image/manual-inside-adapter records keep their original inputs and tracing; they are not rewritten.
 
 ### Benchmark
 
@@ -78,15 +79,18 @@ No V5 fallback. Selection metadata is `version=v6`, `variant=thai_ft_v2`. Some r
 
 ## Auto ROI & Manual ROI
 
-Auto Detect calls `/api/v1/document-layouts`; suggestions do not automatically trigger OCR. They remain visible after selection/editing. Users can switch suggestions or draw a manual region without deleting them. Suggestions and the last manual ROI are remembered per page in the current workspace session, not across reloads.
+Auto Layout calls `/api/v1/document-layouts` and immediately displays all returned usable boxes as editable drafts. Users can add, move, resize or delete Auto/Manual boxes without losing the others. The main preview contains only Global Layout boxes. Suggestions are page/session-local; saved selected fields survive reload.
 
-Coordinates refer to original image/selected PDF raster pixels. Backend validation/clamping and integer boundaries are authoritative; right/bottom are exclusive. Zoom/pan only changes rendering. Editing Auto retains `roi_source=auto`; drawing a new region sets `manual`. Confirm the region before running. Mint, Hutch Crop, Benchmark and Thai FT v2 share its canonical crop.
+Coordinates refer to original image/selected PDF raster pixels. Zoom/pan affects only rendering. Backend ordering groups boxes with at least 50% vertical overlap relative to the shorter height against a fixed row anchor, then sorts rows top-to-bottom and boxes left-to-right. UUIDs are stable; `field_index` is recomputed before OCR, then locked. All five adapters receive identical canonical PNG bytes/hash/dimensions per Global Field.
 
 ## Ground Truth
 
-Field-level is default. Fields belong to a specific TestCase → PipelineRun → OCR field, with prediction/confidence/GT. Fields derive from normalized OCR regions; reruns create new fields.
+Two persisted modes share the same Global Layout:
 
-**Check** previews without saving. **Confirm** persists GT and replaces its evaluation. Confirmed fields contribute to the run summary. Whole-document/ROI GT remains optional and separate: it drives Matrix/Error Analytics and Dataset eligibility. Field confirmation alone does not confirm whole GT. Historical runs without fields remain readable.
+- **Whole Field:** one GT for the complete page. Backend joins predictions by stored Global Field order with newline separators, then applies existing normalization and alignment. Raw responses remain unchanged.
+- **Sub-fields (default):** one shared GT per Global Field, compared independently with all selected pipelines. Select one or more fields; unselected/empty fields have no evaluation. There are no nested line/sub-field entities.
+
+Save Draft invalidates stale evaluation in that scope only. **Calculate** uses backend data presence to evaluate Whole GT, populated selected Sub-fields, or both in one action, independent of the visible tab. It confirms GT and persists metrics/error spans; empty GT cannot be evaluated. Reopening never recomputes results. Mode changes retain both evaluations and select which summary feeds current metrics. See [Global Layout and evaluation](docs/global-layout.md).
 
 ## Metrics
 
@@ -94,17 +98,17 @@ Field-level is default. Fields belong to a specific TestCase → PipelineRun →
 - WER = token edit distance / normalized GT whitespace tokens.
 - Exact Match = normalized prediction equals normalized GT.
 - Field aggregate CER/WER = **total edit counts / total GT units**, not averages of percentages. Aggregate Exact Match requires all included confirmed fields to match.
-- Empty GT with nonempty prediction has undefined rates (`null`); two empty strings score zero errors.
+- The underlying legacy metric function retains its empty-string semantics. Global evaluation rejects blank GT and displays no valid metrics until Calculate.
 
 Normalization: Unicode NFC, normalized newlines, trimming, repeated-whitespace collapse. Spelling/Thai/punctuation are preserved. CER is often more useful for Thai than whitespace WER. Confidence is upstream data (null if absent); local time and Gateway time are separate.
 
 ## Error Analysis
 
-`/analytics/errors` groups whole-GT substitutions/deletions/insertions by pipeline with case links. Alignment shares metrics normalization/edit costs. Updates/recompute replace events transactionally. Field evaluation is separate: substitutions/insertions have red indication; deletions have explicit missing-character markers. See [alignment details](docs/error-analysis-dataset.md).
+Global Results & Comparison renders backend alignment: substitutions/insertions red, deletions as explicit missing markers. Whole Field errors use canonical assembled text; Sub-fields errors use that field's prediction. `/analytics/errors` and the legacy recompute API remain available for historical whole-GT events; they do not recompute Global Layout evaluations.
 
 ## Dataset Builder
 
-`/dataset` exports cases with explicit final ROI and **confirmed whole-document/ROI GT**:
+`/dataset` exports **confirmed Global Fields with their own confirmed Sub-fields GT** and available source. Whole Field GT never becomes inferred field labels. Existing eligible legacy ROI/whole-GT samples remain exportable:
 
 ```text
 dataset/
@@ -115,13 +119,13 @@ dataset/
 
 `label.txt` is UTF-8 escaped TSV: `images/000001.png<TAB>confirmed raw GT<LF>`. Backslash/tab/CR/newline use reversible escapes; Thai and spaces remain intact. Decode the four escapes in one pass after splitting on the actual tab.
 
-Images are lossless crops from stored originals/rendered PDF pages using final source ROI, never screenshots. OCR predictions, CER/WER/confidence/latency and pipeline names are not labels. Cases sort by UUID; export paths are generated safely. Limits: 200 cases / 512 MiB encoded images per ZIP.
+Images are lossless crops from stored originals/rendered PDF pages using final source ROI, never screenshots. OCR predictions, CER/WER/confidence/latency and pipeline names are not labels. Cases sort by UUID and global samples by stored field order; export paths are generated safely. Limits: 200 cases / 512 MiB encoded images per ZIP.
 
 Missing originals show unavailable and cannot be selected. Export rejects the whole request with clear 409 information if a source is unavailable; no fake image or dropped label. Restore originals or re-upload and confirm new samples. See [details](docs/fields-roi-dataset.md).
 
 ## Multi-page PDF
 
-Original PDFs are stored; pages rasterize on demand at saved DPI. ROI state is separate per page. Batch selection creates a new full-page case per page, processes pages sequentially and commits before the next. Pipelines within a page run concurrently. NDJSON streams progress. Disconnection is not a resumable background job: inspect History/Logs before retrying.
+Original PDFs are stored; pages rasterize on demand at saved DPI. Global Layout, suggestions and GT drafts are separate per page. The legacy viewer retains batch processing: Batch selection creates a new full-page case per page, processes pages sequentially and commits before the next. Pipelines within a page run concurrently. NDJSON streams progress. Disconnection is not a resumable background job: inspect History/Logs before retrying.
 
 ## Database
 
@@ -138,7 +142,8 @@ OpenAPI: `/docs`, `/openapi.json`. App routes use `/api`:
 | Health | `GET /health`, `/upload-config`, `/integrations/model-gateway/status` |
 | Documents | `POST /documents`; metadata/image/page/crop reads; `POST /documents/{id}/auto-rois`, `/run-pages` |
 | Cases | `POST/GET /test-cases`; `GET/PUT/DELETE /test-cases/{id}`; ROI/categories/GT updates; run/results |
-| Fields | `GET /test-cases/{id}/runs/{run_id}/fields`; field `POST /check`, `PUT /ground-truth` |
+| Global Layout | `GET/PUT /test-cases/{id}/global-fields`; field `PUT /ground-truth`; case `PUT /ground-truth`, `PUT /evaluation-mode`, `POST /evaluate` |
+| Legacy Fields | `GET /test-cases/{id}/runs/{run_id}/fields`; field `POST /check`, `PUT /ground-truth` |
 | Analysis | `GET /history`, `/matrix`, `/categories`, `/analytics/categories`, `/analytics/errors`; case `POST /errors/recompute` |
 | Dataset | `GET /dataset/samples`, `POST /dataset/export` |
 | Operations | `GET /logs`, `GET /pipelines`, per-pipeline `GET/PUT`, `POST /test-connection` |

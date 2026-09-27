@@ -1,5 +1,7 @@
 # สถาปัตยกรรมแอป
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 ## ขอบเขตระบบ
 
 Frontend Next.js ใช้ canonical API contract เท่านั้น ไม่มี vendor parser, database driver หรือ Gateway key ใน browser Backend FastAPI รับไฟล์ ตรวจ ROI สร้าง input เรียก Gateway และบันทึกผลผ่าน repository

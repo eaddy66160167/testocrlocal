@@ -154,15 +154,13 @@ def test_critical_crop_fairness_and_request_contract(settings, png, gateway, mon
     original.close()
 
 
-def test_full_rejects_prebuilt_crop(settings, png):
-    original = ImageService.open(png)
-    crop = ImageService(settings).canonical_crop(original, None)
-    with pytest.raises(GatewayError, match="never a pre-made crop"):
-        asyncio.run(
-            HutchFullPipelineAdapter(config("hutch_full"), settings).run(
-                original_image=original, cropped_image=crop
-            )
-        )
+def test_full_requires_canonical_prebuilt_crop(settings, png):
+    with ImageService.open(png) as original:
+        adapter = HutchFullPipelineAdapter(config("hutch_full"), settings)
+        crop = ImageService(settings).canonical_crop(original, None)
+        assert adapter.prepare_input(original, crop, None) is crop
+        with pytest.raises(GatewayError, match="canonical pre-adapter crop"):
+            adapter.prepare_input(original, None, None)
 
 
 def test_no_key_means_no_auth_header(settings, png):

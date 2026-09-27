@@ -1,8 +1,10 @@
+export type EvaluationMode = "whole_document" | "per_field";
 export type PipelineId = string;
 export type ROI = { x1: number; y1: number; x2: number; y2: number };
 export type ROISource = "auto" | "manual" | "none";
 export type FieldComparison = Metrics & { character_edits: number; word_edits: number; gt_characters: number; gt_words: number; normalized_ocr: string; normalized_ground_truth: string; spans: { kind: "equal" | "substitution" | "insertion" | "deletion"; text: string; missing?: string | null }[] };
-export type OCRField = { id: string; pipeline_run_id: string; field_index: number; geometry: Partial<OCRBox>; ocr_text: string; confidence: number | null; ground_truth_raw: string | null; ground_truth_normalized: string | null; confirmed_at: string | null; evaluation: FieldComparison | null };
+export type GlobalField = {id: string; field_index: number; roi: ROI; source: "auto" | "manual"; ground_truth_raw: string | null; ground_truth_normalized?: string | null; confirmed_at: string | null};
+export type OCRField = { global_field_id?: string | null; status?: "success" | "error"; diagnostics?: Record<string, unknown> | null; id: string; pipeline_run_id: string; field_index: number; geometry: Partial<OCRBox>; ocr_text: string; confidence: number | null; ground_truth_raw: string | null; ground_truth_normalized: string | null; confirmed_at: string | null; evaluation: FieldComparison | null };
 export type FieldSummary = { confirmed_fields: number; total_fields: number; cer: number | null; wer: number | null; exact_match: boolean | null };
 export type ViewerBox = { id: string; bbox: [number, number, number, number]; polygon?: [number, number][] | null; text: string; confidence: number | null; color: string; pipelineId: string };
 export type Document = { id: string; filename: string; mime_type: string; width: number; height: number; created_at: string; storage_key: string; image_url: string; sha256?: string; document_type: "image" | "pdf"; page_count: number; page_number: number | null; pdf_render_dpi?: number | null };
@@ -10,6 +12,7 @@ export type Category = { id: string; code: string; display_name: string };
 export type Metrics = { cer: number | null; wer: number | null; exact_match: boolean };
 export type OCRBox = { bbox: [number, number, number, number]; polygon?: [number, number][] | null; crop_bbox?: [number, number, number, number] | null; crop_polygon?: [number, number][] | null; text: string; confidence: number | null; det_confidence?: number | null; rec_confidence?: number | null };
 export type PipelineRun = {
+  document_evaluation?: (FieldComparison & {prediction: string; mode: "whole_document"; evaluated_at: string}) | null;
   id: string; pipeline_id: string; pipeline_name: string; status: "success" | "error";
   raw_text: string | null; final_text: string | null; text: string | null; normalized_text: string | null;
   confidence: number | null; processing_time_ms: number | null; boxes: OCRBox[];
@@ -25,6 +28,8 @@ export type PipelineRun = {
   model_info?: { detector?: string | null; recognizer?: string | null; service?: string | null; gateway_model?: string | null };
 };
 export type TestCase = {
+  evaluation_mode?: EvaluationMode; document_gt_confirmed_at?: string | null;
+  workflow?: "legacy" | "global"; global_fields?: GlobalField[]; layout_confirmed_at?: string | null; layout_locked_at?: string | null;
   id: string; document_id: string; document: Document; roi: ROI | null;
   roi_source?: ROISource;
   page_number: number | null;
@@ -48,7 +53,7 @@ export type MatrixRow = {
 };
 export type CategoryAnalytics = { code: string; display_name: string; test_cases: number; pipelines: MatrixRow[] };
 export type QueryFilters = { category?: string; pipeline?: string; date_from?: string; date_to?: string; document?: string; limit?: number; offset?: number };
-export type TestCaseInput = { document_id: string; roi: ROI | null; roi_source?: ROISource; ground_truth_raw: string | null; category_codes: string[]; page_number?: number | null };
+export type TestCaseInput = { workflow?: "legacy" | "global"; document_id: string; roi: ROI | null; roi_source?: ROISource; ground_truth_raw: string | null; category_codes: string[]; page_number?: number | null };
 export type RunResponse = { test_case_id: string; runs: PipelineRun[] };
 export type AutoROISuggestion = { id: string; roi: ROI; score: number | null; source: string };
 export type AutoROIResponse = { regions: AutoROISuggestion[]; request_id?: string | null };

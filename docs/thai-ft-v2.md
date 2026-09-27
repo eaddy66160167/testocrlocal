@@ -9,7 +9,7 @@ The fifth pipeline, `thai_ft_v2` (display name **Thai FT v2**), reuses the exist
 
 Both stages use repeated multipart `images`. Benchmark sends neither `model` nor `engine`. Thai FT v2 sends `model=thai_ft_v2` at both stages and never falls back to REC V5.
 
-Flow: active canonical ROI PNG → DET → polygons in returned order → perspective crops from that exact PNG → REC batches → ordered PipelineRun boxes and text. Auto and Manual ROI both supply the selected crop. Hutch Full retains its separate Auto/full-page and Manual/crop behavior.
+Flow: active canonical ROI PNG → DET → polygons in returned order → perspective crops from that exact PNG → REC batches → ordered PipelineRun boxes and text. Auto and Manual ROI both supply the selected crop. All five adapters, including Hutch Full, now receive the same canonical Global Field crop; upstream DET/REC contracts remain unchanged.
 
 The model owner confirmed that `results[*].model = th_PP-OCRv5_mobile_rec` in Thai FT v2 REC output is an **old upstream metadata label awaiting cleanup**, not a routing instruction. Raw upstream metadata remains unchanged by normalization (existing image/secret redaction still applies). Application-facing model information uses `model_selection.model_name`, currently `PP-OCRv6_medium_rec`, with selected configuration `version=v6`, `variant=thai_ft_v2`. If that metadata is absent, the display identifies the selected Thai FT v2 V6 configuration rather than guessing an underlying architecture.
 

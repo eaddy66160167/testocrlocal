@@ -43,7 +43,6 @@ class PipelineManager:
                     cropped_image=cropped_image if adapter.requires_crop else None,
                     roi=roi,
                     request_id=request_id,
-                    **({"roi_source": roi_source} if config.pipeline_id == "hutch_full" else {}),
                 )
                 return PipelineRun(
                     pipeline_id=result.pipeline_id,

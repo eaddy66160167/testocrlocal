@@ -178,7 +178,7 @@ export default function DatasetPage() {
                 onClick={() =>
                   setSelected((old) =>
                     Array.from(
-                      new Set([...old, ...data.items.filter(s => s.source_available !== false).map((s) => s.id)]),
+                      new Set([...old, ...data.items.filter(s => s.source_available !== false).map((s) => s.global_field_id ? `field:${s.id}` : s.id)]),
                     ).slice(0, 200),
                   )
                 }
@@ -204,17 +204,17 @@ export default function DatasetPage() {
                         <input
                           type="checkbox"
                           aria-label={`เลือก ${sample.id}`}
-                          checked={selected.includes(sample.id)}
+                          checked={selected.includes(sample.global_field_id ? `field:${sample.id}` : sample.id)}
                           disabled={
                             exporting || sample.source_available === false ||
-                            (!selected.includes(sample.id) &&
+                            (!selected.includes(sample.global_field_id ? `field:${sample.id}` : sample.id) &&
                               selected.length >= 200)
                           }
                           onChange={(e) =>
                             setSelected((old) =>
                               e.target.checked
-                                ? [...old, sample.id]
-                                : old.filter((id) => id !== sample.id),
+                                ? [...old, sample.global_field_id ? `field:${sample.id}` : sample.id]
+                                : old.filter((id) => id !== (sample.global_field_id ? `field:${sample.id}` : sample.id)),
                             )
                           }
                         />
@@ -226,7 +226,7 @@ export default function DatasetPage() {
                             sample.roi,
                             sample.page_number,
                           )}
-                          alt={`ROI ${sample.filename}`}
+                          alt={`ROI ${sample.filename}${sample.field_index ? ` · Field ${String(sample.field_index).padStart(2,"0")}` : ""}`}
                           width={120}
                           height={70}
                           unoptimized
@@ -234,8 +234,8 @@ export default function DatasetPage() {
                         />}
                       </td>
                       <td>
-                        <Link className="mini-link" href={`/test/${sample.id}`}>
-                          {sample.filename}
+                        <Link className="mini-link" href={`/test/${sample.test_case_id ?? sample.id}`}>
+                          {sample.filename}{sample.field_index ? ` · Field ${String(sample.field_index).padStart(2,"0")}` : ""}
                         </Link>
                         <p className="muted">
                           {sample.page_number

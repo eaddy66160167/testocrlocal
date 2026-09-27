@@ -22,6 +22,9 @@ class DatasetService:
             items=[
                 dict(
                     id=c.id,
+                    test_case_id=getattr(c, "test_case_id", c.id),
+                    global_field_id=getattr(c, "global_field_id", None),
+                    field_index=getattr(c, "field_index", None),
                     document_id=c.document_id,
                     filename=c.document.filename,
                     page_number=c.page_number,
@@ -36,8 +39,8 @@ class DatasetService:
             ],
         )
 
-    def export(self, ids):
-        records = self.repository.selected(ids)
+    def export(self, ids, global_field_ids=()):
+        records = sorted(self.repository.selected(ids) + self.repository.selected_fields(global_field_ids), key=lambda c: (getattr(c, "test_case_id", c.id), getattr(c, "field_index", 0)))
         for case in records:
             if not self.cases.storage.exists(case.document.storage_key):
                 raise self.missing_source(case.id)

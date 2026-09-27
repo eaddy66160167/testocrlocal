@@ -1,5 +1,7 @@
 # Field Ground Truth, ROI origins and Dataset export
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 This additive change uses the existing normalized PipelineRun boxes, metrics/alignment, source-coordinate ROI and StorageService. No Gateway endpoint, credentials, deployment configuration or production data migration is changed.
 
 ## Data and lifecycle

@@ -18,7 +18,6 @@ const links = [
   { href: "/history", label: "ประวัติ", icon: History },
   { href: "/matrix", label: "เปรียบเทียบ", icon: BarChart3 },
   { href: "/analytics/categories", label: "วิเคราะห์", icon: Layers3 },
-  { href: "/analytics/errors", label: "ข้อผิดพลาด OCR", icon: ScanLine },
   { href: "/dataset", label: "Dataset", icon: BookOpen },
   { href: "/logs", label: "บันทึกระบบ", icon: BookOpen },
 ];
@@ -26,9 +25,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const detail = pathname.startsWith("/test/");
+  const workflow = pathname.startsWith("/workflow/");
   const section =
     links.find((l) => l.href === pathname)?.label ??
-    (detail ? "รายละเอียดชุดทดสอบ" : "ตั้งค่า Pipeline");
+    (workflow ? "ทดสอบ OCR" : detail ? "รายละเอียดชุดทดสอบ" : "ตั้งค่า Pipeline");
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -55,7 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav id="console-navigation" aria-label="เมนูหลัก">
           <div className="workspace-label">งานหลัก</div>
           {links.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href === "/history" && detail);
+            const active = pathname === href || (href === "/history" && detail) || (href === "/" && workflow);
             return (
               <Link
                 key={href}

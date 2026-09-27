@@ -19,7 +19,7 @@ def history(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    return [test_case_json(record) for record in repository.cases(filters, limit, offset)]
+    return [test_case_json(record) for record in repository.cases(filters, limit, offset, runs_only=True)]
 
 
 @router.get("/categories")

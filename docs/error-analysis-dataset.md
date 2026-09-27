@@ -1,5 +1,7 @@
 # ROI, error analysis and Dataset Builder
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 The existing workspace and Gateway contracts are unchanged. No new environment
 variables or external services are required. Apply the additive migration with
 `cd backend` then `.venv\Scripts\python.exe -m alembic upgrade head` against your

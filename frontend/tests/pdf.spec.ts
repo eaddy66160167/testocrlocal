@@ -1,3 +1,4 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { t } from "../lib/i18n/th";
@@ -5,14 +6,14 @@ import type { Document, PipelineConfig, RunResponse } from "../types";
 
 const backend = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
-test("Thai multi-page PDF: choose page two, ROI, all configured pipelines, save and reopen", async ({ page, request }) => {
+test("legacy compatibility: Thai multi-page PDF: choose page two, ROI, all configured pipelines, save and reopen", async ({ page, request }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   const configs: PipelineConfig[] = await (await request.get(`${backend}/api/pipelines`)).json();
   for (const config of configs) {
     expect((await request.put(`${backend}/api/pipelines/${config.pipeline_id}`, { data: { enabled: true } })).ok()).toBeTruthy();
   }
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
   await expect(page.getByRole("heading", { name: t("OCR Testing & Benchmark"), exact: true })).toBeVisible();
   const uploadResponse = page.waitForResponse(response => response.url().endsWith("/api/documents") && response.request().method() === "POST");
@@ -73,7 +74,7 @@ test("Thai multi-page PDF: choose page two, ROI, all configured pipelines, save 
   expect(result.runs.every(run => run.status === "success")).toBeTruthy();
   const mint = result.runs.find(run => run.pipeline_id === "mint")!;
   const full = result.runs.find(run => run.pipeline_id === "hutch_full")!;
-  expect(full.crop_stage).toBe("manual_roi");
+  expect(full.crop_stage).toBe("app_crop");
   expect(full.input_width).toBe(mint.input_width);
   expect(full.input_height).toBe(mint.input_height);
   expect(result.runs.every(run => run.metrics?.cer != null && run.metrics?.wer != null)).toBeTruthy();
@@ -112,9 +113,9 @@ test("Thai multi-page PDF: choose page two, ROI, all configured pipelines, save 
   expect(errors).toEqual([]);
 });
 
-test("Thai PDF error and browser upload-size validation", async ({ page }) => {
+test("Global workspace Thai PDF error and browser upload-size validation", async ({ page }) => {
   await page.route("**/api/upload-config", route => route.fulfill({ json: { max_upload_mb: 1, pdf_render_dpi: 200 } }));
-  await page.goto("/");
+  await page.goto('/');
   await expect(page.getByRole("button", { name: t("Upload document"), exact: true })).toBeEnabled();
   await page.locator('input[type="file"]').first().setInputFiles({ name: "broken.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-broken") });
   await expect(page.locator("main").getByRole("alert")).toContainText("ไม่สามารถเปิดไฟล์ PDF นี้ได้ กรุณาตรวจสอบว่าไฟล์ไม่เสียหาย");

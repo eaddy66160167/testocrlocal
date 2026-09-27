@@ -5,12 +5,24 @@ from app.services.field_service import field_summary
 
 def field_json(field):
     return {"id": field.id, "pipeline_run_id": field.pipeline_run_id,
+            "global_field_id": field.global_field_id, "status": field.status,
+            "diagnostics": field.diagnostics,
             "field_index": field.field_index, "geometry": field.geometry,
             "ocr_text": field.ocr_text, "confidence": field.confidence,
             "ground_truth_raw": field.ground_truth_raw,
             "ground_truth_normalized": field.ground_truth_normalized,
             "confirmed_at": timestamp(field.confirmed_at) if field.confirmed_at else None,
             "evaluation": field.evaluation}
+
+
+def global_field_json(field):
+    return {
+        "id": field.id, "field_index": field.field_index, "roi": field.roi, "source": field.source,
+        "ground_truth_raw": field.ground_truth_raw,
+        "ground_truth_normalized": field.ground_truth_normalized,
+        "confirmed_at": timestamp(field.confirmed_at) if field.confirmed_at else None,
+
+    }
 
 
 def timestamp(value):
@@ -63,6 +75,7 @@ def run_json(record):
         "processing_time_ms",
         "boxes",
         "raw_response",
+        "document_evaluation",
         "error_message",
         "error_code",
         "input_sha256",
@@ -116,6 +129,12 @@ def test_case_json(record):
         "page_number": record.page_number,
         "roi": record.roi,
         "roi_source": record.roi_source,
+        "workflow": record.workflow,
+        "evaluation_mode": record.evaluation_mode,
+        "document_gt_confirmed_at": timestamp(record.document_gt_confirmed_at) if record.document_gt_confirmed_at else None,
+        "layout_confirmed_at": timestamp(record.layout_confirmed_at) if record.layout_confirmed_at else None,
+        "layout_locked_at": timestamp(record.layout_locked_at) if record.layout_locked_at else None,
+        "global_fields": [global_field_json(field) for field in record.global_fields],
         "ground_truth_raw": record.ground_truth_raw,
         "ground_truth_normalized": record.ground_truth_normalized,
         "status": record.status,

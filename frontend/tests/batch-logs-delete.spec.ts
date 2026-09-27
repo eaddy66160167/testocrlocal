@@ -1,9 +1,10 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 
 const backend = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
-test("selected PDF pages run separately; logs and confirmed deletion preserve document", async ({
+test("legacy compatibility: selected PDF pages run separately; logs and confirmed deletion preserve document", async ({
   page,
   request,
 }) => {
@@ -11,7 +12,7 @@ test("selected PDF pages run separately; logs and confirmed deletion preserve do
     await request.put(`${backend}/api/pipelines/${id}`, {
       data: { enabled: true },
     });
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   const uploaded = page.waitForResponse(
     (r) =>
       r.url().endsWith("/api/documents") && r.request().method() === "POST",

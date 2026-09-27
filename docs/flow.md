@@ -1,5 +1,7 @@
 # ขั้นตอนใช้งานและเส้นทางข้อมูล
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 1. อัปโหลด PNG/JPG/รูปแบบภาพที่รองรับหรือ PDF เลือกหน้า PDF ก่อนสร้างชุดทดสอบ
 2. ซูม เลื่อนภาพ และวาด/ย้าย/ปรับขนาด ROI พิกัดเก็บเทียบภาพต้นฉบับ ไม่ใช่พิกัดหน้าจอ
 3. อาจใช้ Auto Detect แล้วเลือกหนึ่งกรอบเพื่อปรับต่อเอง หากบริการไม่พร้อมยังวาด ROI ได้

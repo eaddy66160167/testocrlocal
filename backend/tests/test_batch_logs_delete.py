@@ -94,8 +94,8 @@ def test_batch_order_failure_independence_and_safe_logs(client, gateway, monkeyp
     assert all({c["code"] for c in r["categories"]} == {"thai_text", "blur"} for r in records)
     for record in records:
         assert record["roi"]["x2"] == record["document"]["width"]
-        assert record["runs"][2]["roi"] is None
-        assert record["runs"][2]["crop_stage"] == "full_image"
+        assert record["runs"][2]["roi"] == record["roi"]
+        assert record["runs"][2]["crop_stage"] == "app_crop"
     client.put(f"/api/test-cases/{records[0]['id']}/ground-truth", json={"ground_truth_raw": "private truth"})
     assert client.get(f"/api/test-cases/{records[2]['id']}").json()["ground_truth_raw"] is None
     logs = client.get("/api/logs?limit=100").json()

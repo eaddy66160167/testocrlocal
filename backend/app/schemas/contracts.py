@@ -25,6 +25,7 @@ class ROI(InputModel):
 
 
 class TestCaseCreate(InputModel):
+    workflow: Literal["legacy", "global"] = "legacy"
     document_id: UUID
     page_number: int | None = Field(default=None, ge=1, strict=True)
     roi: ROI | None = None
@@ -47,6 +48,49 @@ class GroundTruthUpdate(InputModel):
 
 class FieldCheck(InputModel):
     ground_truth_raw: str = Field(max_length=100000)
+
+
+class GlobalFieldInput(InputModel):
+    id: UUID
+    field_index: int = Field(ge=1, le=10000, strict=True)
+    roi: ROI
+    source: Literal["auto", "manual"]
+
+
+class GlobalLayoutUpdate(InputModel):
+    fields: list[GlobalFieldInput] = Field(max_length=50)
+    confirmed: bool = False
+
+    @model_validator(mode="after")
+    def unique_fields(self):
+        if len({f.id for f in self.fields}) != len(self.fields) or len({f.field_index for f in self.fields}) != len(self.fields):
+            raise ValueError("Global Field IDs and indices must be unique")
+        if self.confirmed and not self.fields:
+            raise ValueError("Select at least one Global Field before confirming layout")
+        return self
+
+
+class GlobalGroundTruth(InputModel):
+    ground_truth_raw: str = Field(max_length=100000)
+
+
+class EvaluationMode(InputModel):
+    mode: Literal["whole_document", "per_field"]
+
+
+class GlobalEvaluation(EvaluationMode):
+    mode: Literal["whole_document", "per_field", "auto"] = "auto"
+    global_field_ids: list[UUID] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def valid_selection(self):
+        if len(set(self.global_field_ids)) != len(self.global_field_ids):
+            raise ValueError("Select each Global Field only once")
+        if self.mode == "per_field" and not self.global_field_ids:
+            raise ValueError("Select at least one Global Field")
+        if self.mode == "whole_document" and self.global_field_ids:
+            raise ValueError("Whole Document evaluates the complete layout")
+        return self
 
 
 class RunRequest(InputModel):
@@ -169,7 +213,16 @@ class ErrorFilters(BaseModel):
 
 
 class DatasetExport(InputModel):
-    test_case_ids: list[UUID] = Field(min_length=1, max_length=200)
+    test_case_ids: list[UUID] = Field(default_factory=list, max_length=200)
+    global_field_ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def valid_selection(self):
+        if not 1 <= len(self.test_case_ids) + len(self.global_field_ids) <= 200:
+            raise ValueError("Select between 1 and 200 samples")
+        if len(set(self.global_field_ids)) != len(self.global_field_ids):
+            raise ValueError("Select each Global Field only once")
+        return self
 
     @field_validator("test_case_ids")
     @classmethod

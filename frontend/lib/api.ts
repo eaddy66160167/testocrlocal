@@ -37,7 +37,7 @@ function query(filters?: QueryFilters): string {
 }
 
 export const getUploadConfig = () => request<{ max_upload_mb: number; pdf_render_dpi: number }>("/upload-config");
-export const getDocumentPage = (id: string, page_number: number) => request<Document>(`/documents/${id}?page_number=${page_number}`);
+export const getDocumentPage = (id: string, page_number?: number) => request<Document>(`/documents/${id}${page_number === undefined ? "" : `?page_number=${page_number}`}`);
 export const getGatewayStatus = () => request<import("@/types").GatewayStatus>("/integrations/model-gateway/status");
 export const getAutoROIs = (id: string, auto_roi_mode = "text-line", page_number: number | null = null) => request<import("@/types").AutoROIResponse>(`/documents/${id}/auto-rois`, { method: "POST", body: JSON.stringify({ auto_roi_mode, expand_text_rois: false, page_number }) });
 export const getCategories = () => request<Category[]>("/categories");
@@ -79,10 +79,10 @@ export const getCategoryAnalytics = (filters?: QueryFilters) => request<Category
 export type ErrorGroup = { pipeline_id: string; error_type: string; ground_truth_unit: string | null; ocr_unit: string | null; count: number; test_case_count: number; cases: { id: string; document_id: string; filename: string; page_number: number | null; categories: string[] }[] };
 export const getErrorAnalysis = (params: URLSearchParams) => request<{ total: number; items: ErrorGroup[] }>(`/analytics/errors?${params}`);
 export const recomputeErrors = (id: string) => request<{ recomputed_runs: number }>(`/test-cases/${id}/errors/recompute`, { method: "POST" });
-export type DatasetSample = { id: string; document_id: string; filename: string; page_number: number | null; roi: import("@/types").ROI; ground_truth_raw: string; updated_at: string; source_sha256: string | null; categories: string[]; source_available?: boolean };
+export type DatasetSample = { id: string; test_case_id?: string; global_field_id?: string | null; field_index?: number | null; document_id: string; filename: string; page_number: number | null; roi: import("@/types").ROI; ground_truth_raw: string; updated_at: string; source_sha256: string | null; categories: string[]; source_available?: boolean };
 export const getDatasetSamples = (params: URLSearchParams) => request<{ total: number; items: DatasetSample[] }>(`/dataset/samples?${params}`);
 export async function exportDataset(test_case_ids: string[]) {
-  const response = await fetch(`${API_BASE_URL}/api/dataset/export`, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test_case_ids }) });
+  const response = await fetch(`${API_BASE_URL}/api/dataset/export`, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test_case_ids: test_case_ids.filter(id=>!id.startsWith("field:")).map(id=>id.replace(/^case:/,"")), global_field_ids: test_case_ids.filter(id=>id.startsWith("field:")).map(id=>id.slice(6)) }) });
   if (!response.ok) { const error = await response.json().catch(() => null); throw new Error(typeof error?.detail === "string" ? error.detail : "ส่งออก Dataset ไม่สำเร็จ กรุณาลองใหม่"); }
   return response.blob();
 }
@@ -92,3 +92,8 @@ export async function loadSample(): Promise<File> {
   if (!response.ok) throw new Error(t("The sample document could not be loaded."));
   return new File([await response.blob()], "sample-document.png", { type: "image/png" });
 }
+
+export const saveGlobalLayout = (id: string, fields: import("@/types").GlobalField[], confirmed: boolean) => request<TestCase>(`/test-cases/${id}/global-fields`, {method: "PUT", body: JSON.stringify({fields: fields.map(({id,field_index,roi,source})=>({id,field_index,roi,source})),confirmed})});
+export const saveGlobalGT = (caseId: string, field: import("@/types").GlobalField) => request<TestCase>(`/test-cases/${caseId}/global-fields/${field.id}/ground-truth`, {method:"PUT",body:JSON.stringify({ground_truth_raw:field.ground_truth_raw ?? ""})});
+export const setEvaluationMode = (caseId: string, mode: import("@/types").EvaluationMode) => request<TestCase>(`/test-cases/${caseId}/evaluation-mode`, {method:"PUT",body:JSON.stringify({mode})});
+export const evaluateGlobal = (caseId: string, mode: import("@/types").EvaluationMode | "auto", global_field_ids: string[] = []) => request<TestCase>(`/test-cases/${caseId}/evaluate`, {method:"POST",body:JSON.stringify({mode,global_field_ids})});

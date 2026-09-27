@@ -2,7 +2,7 @@
 import { t } from "@/lib/i18n/th";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Group, Image as KonvaImage, Layer, Rect, Stage } from "react-konva";
+import { Group, Image as KonvaImage, Layer, Rect, Stage, Text } from "react-konva";
 import type Konva from "konva";
 import {
   Crop,
@@ -22,6 +22,10 @@ import BoundingBoxLayer from "./BoundingBoxLayer";
 import TestRegionLayer from "./TestRegionLayer";
 
 export interface DocumentViewerProps {
+  compactReference?: boolean;
+  globalFields?: {id: string; field_index: number; roi: ROI}[];
+  selectedGlobalFieldId?: string | null;
+  onSelectGlobalField?: (id: string) => void;
   imageUrl: string;
   width: number;
   height: number;
@@ -48,6 +52,7 @@ const MIN_ZOOM = 0.005;
 const MAX_ZOOM = 8;
 
 export default function DocumentViewer({
+  compactReference = false,
   imageUrl,
   width,
   height,
@@ -64,6 +69,9 @@ export default function DocumentViewer({
   allowRoi = true,
   suggestions = [],
   onSelectSuggestion,
+  globalFields,
+  selectedGlobalFieldId,
+  onSelectGlobalField,
 }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
@@ -295,7 +303,7 @@ export default function DocumentViewer({
 
   return (
     <div
-      className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white"
+      className={`flex ${compactReference ? "min-h-[380px]" : "min-h-[520px]"} flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
       data-testid="document-viewer"
     >
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
@@ -431,9 +439,9 @@ export default function DocumentViewer({
 
       <div
         ref={containerRef}
-        className="relative min-h-[420px] flex-1 overflow-hidden bg-slate-100"
+        className={`relative ${compactReference ? "min-h-[320px] flex-none" : "min-h-[420px] flex-1"} overflow-hidden bg-slate-100`}
         style={{
-          height: "clamp(420px, 62vh, 760px)",
+          height: compactReference ? "clamp(320px, 40vh, 520px)" : "clamp(420px, 62vh, 760px)",
           backgroundImage: "radial-gradient(#cbd5e1 0.7px, transparent 0.7px)",
           backgroundSize: "16px 16px",
           cursor: regionMode ? "crosshair" : panMode ? "grab" : "default",
@@ -561,6 +569,12 @@ export default function DocumentViewer({
                   width={width}
                   height={height}
                 />
+                {globalFields?.filter(f => f.id !== selectedGlobalFieldId).map(field => (
+                  <Group key={field.id} name="global-layout-field" onClick={() => onSelectGlobalField?.(field.id)} onTap={() => onSelectGlobalField?.(field.id)} listening={!regionMode && !panMode}>
+                    <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke="#2563eb" strokeWidth={2/view.scale} fill="rgba(37,99,235,0.04)" />
+                    <Text x={field.roi.x1} y={Math.max(0,field.roi.y1-18/view.scale)} text={`Field ${String(field.field_index).padStart(2,"0")}`} fontSize={13/view.scale} fill="#1d4ed8" />
+                  </Group>
+                ))}
                 {!!suggestions.length && onSelectSuggestion && (
                   <AutoROIOverlay
                     suggestions={suggestions}
@@ -580,7 +594,7 @@ export default function DocumentViewer({
                       allowRoi && !regionMode && !panMode
                     }
                     drawing={Boolean(draftRoi)}
-                    label={draftRoi || roiSource === "manual" ? "Manual ROI" : roiSource === "auto" ? "Auto ROI" : undefined}
+                    label={globalFields ? (draftRoi ? "New Field" : `Field ${String(globalFields.find(f=>f.id===selectedGlobalFieldId)?.field_index ?? "").padStart(2,"0")}`) : draftRoi || roiSource === "manual" ? "Manual ROI" : roiSource === "auto" ? "Auto ROI" : undefined}
                     onClick={() => {
                       // A click can select an overlapping suggestion; dragging still edits the active ROI.
                       const point = getOriginalPoint();

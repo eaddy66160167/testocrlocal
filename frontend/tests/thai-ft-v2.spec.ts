@@ -1,3 +1,4 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import { t } from "../lib/i18n/th";
@@ -5,7 +6,7 @@ import type { PipelineConfig, PipelineRun } from "../types";
 
 const backend = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
-test("Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence and dashboards", async ({ page, request }) => {
+test("legacy compatibility: Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence and dashboards", async ({ page, request }) => {
   const configs: PipelineConfig[] = await (await request.get(`${backend}/api/pipelines`)).json();
   expect(new Set(configs.map(p => p.pipeline_id))).toEqual(new Set(["mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2"]));
   await page.goto("/settings/pipelines");
@@ -16,7 +17,7 @@ test("Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence 
   for (const enabled of [false, true]) {
     expect((await request.put(`${backend}/api/pipelines/thai_ft_v2`, { data: { enabled } })).ok()).toBeTruthy();
   }
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("public/sample-document.png"));
   await expect(page.getByRole("button", { name: "ราย Field", exact: true })).toHaveAttribute("aria-pressed", "true");
   for (const config of configs) {
@@ -64,7 +65,7 @@ test("Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence 
   await page.goto(`/analytics/errors?test_case_id=${result.test_case_id}`);
   await page.getByLabel("Pipeline", { exact: true }).selectOption("thai_ft_v2");
   await expect(page.locator("tbody tr").first()).toContainText("Thai FT v2");
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("public/sample-document.png"));
   await page.getByRole("button", { name: t("Draw test region"), exact: true }).click();
   const b = (await page.getByTestId("document-viewer").locator(".konvajs-content").boundingBox())!;
@@ -79,5 +80,5 @@ test("Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence 
   expect(manual.runs.map((r: PipelineRun) => r.pipeline_id).sort()).toEqual(configs.map(c => c.pipeline_id).sort());
   expect(manual.runs.every((r: PipelineRun) => r.status === "success")).toBeTruthy();
   expect(new Set(manual.runs.map((r: PipelineRun) => r.input_sha256)).size).toBe(1);
-  expect(manual.runs.find((r: PipelineRun) => r.pipeline_id === "hutch_full").crop_stage).toBe("manual_roi");
+  expect(manual.runs.find((r: PipelineRun) => r.pipeline_id === "hutch_full").crop_stage).toBe("app_crop");
 });

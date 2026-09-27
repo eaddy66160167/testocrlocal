@@ -27,7 +27,8 @@ def response(request):
             return httpx.Response(503, json={"error": {"code": "SERVICE_UNAVAILABLE"}})
         return httpx.Response(200, json={"data": {"regions": [
             {"bbox": [80, 225, 850, 355], "score": 0.8, "source": "test-only-upstream"},
-            {"bbox": [400, 400, 850, 470], "score": 0.9, "source": "test-only-upstream"}
+            {"bbox": [400, 400, 850, 470], "score": 0.9, "source": "test-only-upstream"},
+            {"bbox": [80, 550, 800, 650], "score": 0.85, "source": "test-only-upstream"}
         ]}, "meta": {"request_id": "fixture-layout"}})
     if request.url.path.endswith(("health", "readiness")):
         return httpx.Response(200, json={"data": {"services": [

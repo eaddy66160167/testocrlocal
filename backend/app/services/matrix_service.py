@@ -17,7 +17,7 @@ class MatrixService:
     @staticmethod
     def eligible(run):
         return not run.archived and not (
-            run.pipeline_id == "hutch_full" and run.crop_stage != "full_image"
+            run.pipeline_id == "hutch_full" and run.crop_stage not in {"full_image", "global_fields", "app_crop"}
         )
 
     def aggregate(self, cases, pipeline=None):

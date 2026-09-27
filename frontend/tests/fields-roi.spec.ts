@@ -1,13 +1,14 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
 import fs from "node:fs";
 import { t } from "../lib/i18n/th";
 const api = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
-test("PDF pages retain separate Auto ROI suggestions without another detection request", async ({ page }) => {
+test("legacy compatibility: PDF pages retain separate Auto ROI suggestions without another detection request", async ({ page }) => {
   let detections = 0;
   page.on("request", r => { if (r.url().includes("/auto-rois")) detections++; });
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("tests/fixtures/two-pages.pdf"));
   await page.getByRole("button", { name: t("Auto Detect"), exact: true }).click();
   await expect(page.getByRole("button", { name: "พื้นที่ 2", exact: true })).toBeVisible();
@@ -23,8 +24,8 @@ test("PDF pages retain separate Auto ROI suggestions without another detection r
   expect(detections).toBe(2);
 });
 
-test("default field GT uses Check preview, accessible red errors and explicit confirmation", async ({ page, request }) => {
-  await page.goto("/");
+test("legacy compatibility: default field GT uses Check preview, accessible red errors and explicit confirmation", async ({ page, request }) => {
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("public/sample-document.png"));
   await expect(page.getByRole("button", { name: "ราย Field", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#ground-truth")).toHaveCount(0);
@@ -62,8 +63,8 @@ test("default field GT uses Check preview, accessible red errors and explicit co
   await expect(page.locator("#ground-truth")).toBeVisible();
 });
 
-test("Auto suggestions survive selection, editing and manual drawing; Hutch input follows explicit source", async ({ page, request }) => {
-  await page.goto("/");
+test("legacy compatibility: Auto suggestions survive selection, editing and manual drawing; Hutch input follows explicit source", async ({ page, request }) => {
+  await openLegacyWorkspace(page);
   await page.locator('input[type="file"]').first().setInputFiles(path.resolve("public/sample-document.png"));
   await page.getByRole("button", { name: t("Auto Detect"), exact: true }).click();
   const first = page.getByRole("button", { name: "พื้นที่ 1", exact: true });
@@ -76,7 +77,7 @@ test("Auto suggestions survive selection, editing and manual drawing; Hutch inpu
   let pending = page.waitForResponse(r => r.url().endsWith("/run") && r.request().method() === "POST");
   await page.getByRole("button", { name: t("Run all pipelines"), exact: true }).click();
   const auto = await (await pending).json();
-  expect(auto.runs[2].input_width).toBe(1000); expect(auto.runs[2].roi).toBeNull();
+  expect(auto.runs[2].input_width).toBe(auto.runs[0].input_width); expect(auto.runs[2].roi).toEqual(auto.runs[0].roi);
   expect((await (await request.get(`${api}/api/test-cases/${auto.test_case_id}`)).json()).roi_source).toBe("auto");
   await page.getByRole("button", { name: t("Draw test region"), exact: true }).click();
   const b = (await page.getByTestId("document-viewer").locator(".konvajs-content").boundingBox())!;
@@ -85,21 +86,19 @@ test("Auto suggestions survive selection, editing and manual drawing; Hutch inpu
   await page.mouse.move(x+100*scale,y+250*scale); await page.mouse.down();
   await page.mouse.move(x+750*scale,y+350*scale,{steps:10}); await page.mouse.up();
   await expect(first).toBeVisible(); await expect(second).toBeVisible();
-  await expect(page.getByTestId("hutch-input-rule")).toContainText("Manual ROI crop");
   await page.getByRole("button", { name: "ยืนยัน ROI", exact: true }).click();
   pending=page.waitForResponse(r=>r.url().endsWith("/run") && r.request().method()==="POST");
   await page.getByRole("button",{name:t("Run all pipelines"),exact:true}).click();
   const manual=await (await pending).json();
   expect(manual.test_case_id).not.toBe(auto.test_case_id);
   expect(new Set(manual.runs.map((r: {input_sha256:string})=>r.input_sha256)).size).toBe(1);
-  expect(manual.runs[2].crop_stage).toBe("manual_roi");
+  expect(manual.runs[2].crop_stage).toBe("app_crop");
   expect((await (await request.get(`${api}/api/test-cases/${manual.test_case_id}`)).json()).roi_source).toBe("manual");
   await first.click(); await expect(second).toBeVisible();
   await page.getByRole("button",{name:"ใช้ Manual ROI ล่าสุด",exact:true}).click();
-  await expect(page.getByTestId("hutch-input-rule")).toContainText("Manual ROI crop");
 });
 
-test("Dataset stale-file failure stays actionable and does not hide the selection", async ({ page, request }) => {
+test("legacy compatibility: Dataset stale-file failure stays actionable and does not hide the selection", async ({ page, request }) => {
   const doc=await (await request.post(`${api}/api/documents`,{multipart:{file:{name:"missing-source.png",mimeType:"image/png",buffer:fs.readFileSync(path.resolve("public/sample-document.png"))}}})).json();
   const c=await (await request.post(`${api}/api/test-cases`,{data:{document_id:doc.id,roi:{x1:10,y1:10,x2:100,y2:100},roi_source:"manual"}})).json();
   await request.put(`${api}/api/test-cases/${c.id}/ground-truth`,{data:{ground_truth_raw:"ไทย",confirmed:true}});

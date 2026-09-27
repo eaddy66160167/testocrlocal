@@ -235,7 +235,7 @@ export default function HistoryPage() {
                           หน้า {c.page_number ?? 1} / {c.document.page_count}
                         </span>
                         <span className="row-meta">
-                          {c.ground_truth_raw === null
+                          {c.workflow === "global" ? `${c.global_fields?.length ?? 0} Fields · GT ยืนยัน ${c.global_fields?.filter(f=>f.confirmed_at).length ?? 0}` : c.ground_truth_raw === null
                             ? "ยังไม่มี Ground Truth"
                             : "มี Ground Truth"}
                         </span>

@@ -7,7 +7,11 @@ from app.api.dependencies import CaseServiceDep, RepoDep, SessionDep
 from app.schemas.contracts import (
     BenchmarkFilters,
     CategoriesUpdate,
+    EvaluationMode,
     FieldCheck,
+    GlobalEvaluation,
+    GlobalGroundTruth,
+    GlobalLayoutUpdate,
     GroundTruthUpdate,
     ROIUpdate,
     RunRequest,
@@ -15,9 +19,35 @@ from app.schemas.contracts import (
     TestCaseUpdate,
 )
 from app.services.field_service import FieldService
+from app.services.global_layout_service import GlobalLayoutService
 from app.services.serializers import field_json, run_json, test_case_json
 
 router = APIRouter(prefix="/test-cases")
+
+
+@router.get("/{case_id}/global-fields")
+def global_layout(case_id: UUID, repository: RepoDep):
+    return test_case_json(repository.test_case(str(case_id)))
+
+
+@router.put("/{case_id}/global-fields")
+def save_layout(case_id: UUID, data: GlobalLayoutUpdate, service: CaseServiceDep):
+    return test_case_json(GlobalLayoutService(service).layout(str(case_id), data))
+
+
+@router.put("/{case_id}/global-fields/{field_id}/ground-truth")
+def global_gt(case_id: UUID, field_id: UUID, data: GlobalGroundTruth, service: CaseServiceDep):
+    return test_case_json(GlobalLayoutService(service).save_gt(str(case_id), str(field_id), data))
+
+
+@router.put("/{case_id}/evaluation-mode")
+def global_mode(case_id: UUID, data: EvaluationMode, service: CaseServiceDep):
+    return test_case_json(GlobalLayoutService(service).mode(str(case_id), data.mode))
+
+
+@router.post("/{case_id}/evaluate")
+def evaluate_global(case_id: UUID, data: GlobalEvaluation, service: CaseServiceDep):
+    return test_case_json(GlobalLayoutService(service).evaluate(str(case_id), data))
 
 
 @router.post("", status_code=201)

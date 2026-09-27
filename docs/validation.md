@@ -2,7 +2,7 @@
 
 ## Current release preparation
 
-Current implementation has five pipelines and migration head `0007_fields_roi_source`.
+Current local implementation has five pipelines and migration head `0008_global_layout_evaluation`. See [Global Layout validation](global-layout-validation.md) for the corrected Whole Document / Per Field workflow and current test results. Production was not modified by that task.
 See [release audit](release-audit.md), [Field GT/ROI](fields-roi-dataset.md), and [Thai FT v2 validation](thai-ft-v2.md).
 The dated sections below are historical evidence, including superseded pipeline counts,
 Hutch Full semantics and migration heads. They are retained for traceability and are

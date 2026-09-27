@@ -1,5 +1,7 @@
 # การพัฒนาและ deployment
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 ## Release order and configuration evidence
 
 Before pushing main, inspect Railway/Vercel Git linkage, branch, root directory,

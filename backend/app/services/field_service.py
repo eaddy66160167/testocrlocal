@@ -1,3 +1,4 @@
+from app.core.errors import AppError
 from app.db.models import OCRField, now
 from app.repositories.field_repository import FieldRepository
 from app.services.metrics_service import (
@@ -97,10 +98,14 @@ class FieldService:
 
     def check(self, case_id, run_id, field_id, text):
         field = self.repository.field(case_id, run_id, field_id)
+        if field.global_field_id:
+            raise AppError("Use the canonical Global Field evaluation endpoint", 409)
         return compare_field(field.ocr_text, text)
 
     def update(self, case_id, run_id, field_id, data):
         field = self.repository.field(case_id, run_id, field_id, lock=True)
+        if field.global_field_id:
+            raise AppError("Ground Truth is shared through the Global Field", 409)
         field.ground_truth_raw = data.ground_truth_raw
         field.ground_truth_normalized = normalize_text(data.ground_truth_raw)
         field.confirmed_at = now() if data.confirmed else None

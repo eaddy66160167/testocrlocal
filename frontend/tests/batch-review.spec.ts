@@ -1,13 +1,14 @@
+import { openLegacyWorkspace } from "./legacy-workspace";
 import { test, expect } from "@playwright/test";
 import path from "node:path";
 
 const api = process.env.E2E_API_URL || "http://127.0.0.1:8100";
 
-test("batch selection is independent of preview; selected page results and GT stay inline", async ({
+test("legacy compatibility: batch selection is independent of preview; selected page results and GT stay inline", async ({
   page,
   request,
 }) => {
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page
     .locator('input[type="file"]')
     .first()
@@ -80,10 +81,10 @@ test("batch selection is independent of preview; selected page results and GT st
   });
 });
 
-test("batch retries only failed pages and preserves completed progress", async ({
+test("legacy compatibility: batch retries only failed pages and preserves completed progress", async ({
   page,
 }) => {
-  await page.goto("/");
+  await openLegacyWorkspace(page);
   await page
     .locator('input[type="file"]')
     .first()

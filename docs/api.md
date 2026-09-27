@@ -1,5 +1,7 @@
 # คู่มือ API สำหรับเชื่อมต่อแอป Benchmark
 
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
 เพิ่มเติม: [POST documents/{id}/run-pages, DELETE test-cases/{id}, GET logs](batch-activity.md) พร้อมคำอธิบาย sequential processing, confirmation, retention และ response limit
 
 เรียก FastAPI ของแอป เช่น `http://localhost:8000` ไม่เรียก Gateway จาก frontend และไม่ส่ง Gateway key ให้ browser OpenAPI อยู่ที่ `/docs` และ `/openapi.json`; response dictionaries บางส่วนอธิบายเพิ่มเติมด้านล่าง

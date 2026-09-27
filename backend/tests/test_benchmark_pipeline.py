@@ -220,7 +220,7 @@ def test_benchmark_failure_isolated_from_existing_pipelines(client, case, gatewa
     ).json()["runs"]
     assert [r["status"] for r in runs] == ["success", "success", "success", "error"]
     assert runs[0]["crop_sha256"] == runs[1]["crop_sha256"] == runs[3]["crop_sha256"]
-    assert runs[2]["crop_stage"] == "full_image" and runs[2]["input_width"] == 300
+    assert runs[2]["crop_stage"] == "app_crop" and runs[2]["input_width"] == 230
     assert runs[3]["gateway_request_id"] == "rec-failed"
 
 

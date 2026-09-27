@@ -24,7 +24,7 @@ def samples(
 
 @router.post("/export")
 def export(data: DatasetExport, service: CaseServiceDep):
-    output = DatasetService(service).export([str(id) for id in data.test_case_ids])
+    output = DatasetService(service).export([str(id) for id in data.test_case_ids], [str(id) for id in data.global_field_ids])
 
     def chunks():
         try:

@@ -78,6 +78,7 @@ class TestCaseService:
             else None,
             categories=self.repository.categories(data.category_codes),
             status="draft",
+            workflow=data.workflow,
         )
         record.document_id = document.id
         self.logs.add("test_case_created", case=record)
@@ -87,6 +88,8 @@ class TestCaseService:
 
     def update(self, case_id, data):
         record = self.repository.test_case(case_id, for_update=True)
+        if record.workflow == "global" and ({"roi", "roi_source", "ground_truth_raw"} & data.model_fields_set):
+            raise AppError("Use Global Layout and Global Field Ground Truth endpoints", 409)
         if {"roi", "roi_source"} & data.model_fields_set:
             roi = (data.roi.model_dump() if data.roi else None) if "roi" in data.model_fields_set else record.roi
             source = data.roi_source if "roi_source" in data.model_fields_set else (record.roi_source if roi else "none")
@@ -118,6 +121,9 @@ class TestCaseService:
 
     def ground_truth(self, case_id, data):
         record = self.repository.test_case(case_id, for_update=True)
+        if record.workflow == "global":
+            from app.services.global_layout_service import GlobalLayoutService
+            return GlobalLayoutService(self).save_document_gt(case_id, data)
         self._set_ground_truth(record, data.ground_truth_raw, data.confirmed)
         self.logs.add("ground_truth_updated", case=record)
         return self.repository.save(record)
@@ -161,6 +167,9 @@ class TestCaseService:
 
     async def run(self, case_id, pipeline_ids):
         record = self.repository.test_case(case_id)
+        if record.workflow == "global":
+            from app.services.global_layout_service import GlobalLayoutService
+            return await GlobalLayoutService(self).run(case_id, pipeline_ids)
         configs = [self.repository.config(pipeline_id) for pipeline_id in pipeline_ids]
         self.logs.add("ocr_run_started", case=record)
         self.repository.session.commit()

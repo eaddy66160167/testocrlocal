@@ -146,7 +146,7 @@ def test_roi_fields_persistence_and_dynamic_views(client, document, source):
     run = by_id["thai_ft_v2"]
     assert run["roi"] == roi and run["input_width"] == 230 and run["input_height"] == 120
     assert all(by_id[p]["crop_sha256"] == run["crop_sha256"] for p in ("mint", "hutch_crop", "benchmark"))
-    assert by_id["hutch_full"]["input_width"] == (300 if source == "auto" else 230)
+    assert by_id["hutch_full"]["input_width"] == 230
     field = run["fields"][0]
     assert field["geometry"]["polygon"] == run["boxes"][0]["polygon"]
     url = f"/api/test-cases/{case['id']}/runs/{run['id']}/fields/{field['id']}"

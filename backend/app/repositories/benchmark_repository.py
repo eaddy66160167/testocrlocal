@@ -50,9 +50,11 @@ class BenchmarkRepository:
         return record
 
     def cases(
-        self, filters: BenchmarkFilters, limit: int | None = None, offset: int = 0
+        self, filters: BenchmarkFilters, limit: int | None = None, offset: int = 0, *, runs_only=False
     ) -> list[TestCase]:
         query = select(TestCase)
+        if runs_only:
+            query = query.where(TestCase.runs.any())
         if filters.category:
             query = query.where(TestCase.categories.any(Category.code == filters.category))
         if filters.pipeline:

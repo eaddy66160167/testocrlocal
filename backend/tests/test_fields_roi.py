@@ -123,9 +123,9 @@ def test_explicit_roi_origin_pipeline_inputs(client, document, gateway, source):
     assert runs[0]["crop_sha256"] == runs[1]["crop_sha256"] == runs[3]["crop_sha256"]
     full = runs[2]
     assert (full["input_width"], full["input_height"]) == (
-        (230, 120) if source == "manual" else (300, 200)
+        (230, 120)
     )
-    assert full["roi"] == (roi if source == "manual" else None)
+    assert full["roi"] == roi
     if source == "manual":
         assert full["crop_sha256"] == runs[0]["crop_sha256"]
     sent = [req for req in gateway[1] if req.url.path.endswith("/ocr-results")]
@@ -133,7 +133,7 @@ def test_explicit_roi_origin_pipeline_inputs(client, document, gateway, source):
     for req in sent:
         with Image.open(io.BytesIO(dict(parts(req))["image"])) as image:
             sizes.append(image.size)
-    assert sizes == [(230, 120), (230, 120), (230, 120) if source == "manual" else (300, 200)]
+    assert sizes == [(230, 120), (230, 120), (230, 120)]
     assert (
         client.put(
             f"/api/test-cases/{case['id']}/roi",
