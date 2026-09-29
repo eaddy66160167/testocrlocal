@@ -1,7 +1,8 @@
 from sqlalchemy import select
 
 from app.core.config import Settings
-from app.db.models import Category, PipelineConfig
+from app.db.models import Category, DocumentType, PipelineConfig
+from app.services.document_type_service import DEFAULT_TYPES, normalized_name
 
 CATEGORIES = {
     "thai_text": "Thai text",
@@ -22,6 +23,9 @@ CATEGORIES = {
 
 
 def seed_database(session, settings: Settings):
+    names = set(session.scalars(select(DocumentType.normalized_name)))
+    session.add_all(DocumentType(name=name, normalized_name=normalized_name(name), system=True)
+                    for name in DEFAULT_TYPES if normalized_name(name) not in names)
     existing = set(session.scalars(select(Category.code)))
     session.add_all(
         Category(code=code, display_name=name)

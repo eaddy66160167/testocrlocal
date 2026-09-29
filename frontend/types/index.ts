@@ -7,7 +7,8 @@ export type GlobalField = {id: string; field_index: number; roi: ROI; source: "a
 export type OCRField = { global_field_id?: string | null; status?: "success" | "error"; diagnostics?: Record<string, unknown> | null; id: string; pipeline_run_id: string; field_index: number; geometry: Partial<OCRBox>; ocr_text: string; confidence: number | null; ground_truth_raw: string | null; ground_truth_normalized: string | null; confirmed_at: string | null; evaluation: FieldComparison | null };
 export type FieldSummary = { confirmed_fields: number; total_fields: number; cer: number | null; wer: number | null; exact_match: boolean | null };
 export type ViewerBox = { id: string; bbox: [number, number, number, number]; polygon?: [number, number][] | null; text: string; confidence: number | null; color: string; pipelineId: string };
-export type Document = { id: string; filename: string; mime_type: string; width: number; height: number; created_at: string; storage_key: string; image_url: string; sha256?: string; document_type: "image" | "pdf"; page_count: number; page_number: number | null; pdf_render_dpi?: number | null };
+export type DocumentType = {id: string; name: string; active: boolean; system: boolean};
+export type Document = { document_type_id?: string | null; document_type_name?: string | null; id: string; filename: string; mime_type: string; width: number; height: number; created_at: string; storage_key: string; image_url: string; sha256?: string; document_type: "image" | "pdf"; page_count: number; page_number: number | null; pdf_render_dpi?: number | null };
 export type Category = { id: string; code: string; display_name: string };
 export type Metrics = { cer: number | null; wer: number | null; exact_match: boolean };
 export type OCRBox = { bbox: [number, number, number, number]; polygon?: [number, number][] | null; crop_bbox?: [number, number, number, number] | null; crop_polygon?: [number, number][] | null; text: string; confidence: number | null; det_confidence?: number | null; rec_confidence?: number | null };
@@ -27,7 +28,7 @@ export type PipelineRun = {
   input_byte_size?: number | null; input_format?: string | null; crop_stage?: string | null;
   model_info?: { detector?: string | null; recognizer?: string | null; service?: string | null; gateway_model?: string | null };
 };
-export type TestCase = {
+export type TestCase = { history_status?: string;
   evaluation_mode?: EvaluationMode; document_gt_confirmed_at?: string | null;
   workflow?: "legacy" | "global"; global_fields?: GlobalField[]; layout_confirmed_at?: string | null; layout_locked_at?: string | null;
   id: string; document_id: string; document: Document; roi: ROI | null;

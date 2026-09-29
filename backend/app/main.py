@@ -9,7 +9,16 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.api.routes import activity, benchmark, dataset, documents, health, pipelines, test_cases
+from app.api.routes import (
+    activity,
+    benchmark,
+    dataset,
+    document_types,
+    documents,
+    health,
+    pipelines,
+    test_cases,
+)
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.db.database import Database
@@ -82,7 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def unknown_error(request: Request, exc):
         return JSONResponse({"detail": "The operation could not be completed."}, status_code=500)
 
-    for module in (health, documents, test_cases, pipelines, benchmark, activity, dataset):
+    for module in (health, documents, test_cases, pipelines, benchmark, activity, dataset, document_types):
         app.include_router(module.router, prefix="/api")
     return app
 

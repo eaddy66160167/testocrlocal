@@ -41,7 +41,7 @@ export default function GlobalWorkspace({initialCase,stage}:{initialCase:TestCas
  });}
  const allowed=stage==="layout"||stage==="pipelines"&&locked||(stage==="ground-truth")&&hasRuns;
  return <div className="page-stack" data-testid={`workflow-${stage}`}>
- <PageHeader title={stageTitles[stages.indexOf(stage)]} description={`${doc.filename} · หน้า ${doc.page_number??1}`} actions={<Link href="/history" className="button secondary">ประวัติ</Link>}/>
+ <PageHeader title={stageTitles[stages.indexOf(stage)]} description={`${doc.filename} · ${doc.document_type_name||"ไม่ระบุประเภท"} · หน้า ${doc.page_number??1}`} actions={<Link href="/history" className="button secondary">ประวัติ</Link>}/>
  <WorkflowSteps stage={stage} saved={saved} uploadUrl={`/?document=${doc.id}${doc.document_type==="pdf"?`&page=${doc.page_number??1}`:""}`} busy={busy}/>
  {error&&<div className="error-banner" role="alert">{error}</div>}{busy&&<p role="status" className="notice-banner">กำลังดำเนินการ…</p>}
  {!allowed?<section className="panel panel-body"><p>กรุณาทำขั้นตอนก่อนหน้าให้เสร็จก่อน</p><Link className="button primary" href={workflowUrl(saved.id,locked?"pipelines":"layout")}>กลับไปขั้นตอนก่อนหน้า</Link></section>:<>

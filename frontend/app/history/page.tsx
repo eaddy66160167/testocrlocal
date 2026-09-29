@@ -230,6 +230,7 @@ export default function HistoryPage() {
                       <td>
                         <Link className="row-title" href={`/test/${c.id}`}>
                           {c.document.filename}
+                          <span className="block muted text-xs">{c.document.document_type_name||"ไม่ระบุประเภท"}</span>
                         </Link>
                         <span className="row-meta">
                           หน้า {c.page_number ?? 1} / {c.document.page_count}

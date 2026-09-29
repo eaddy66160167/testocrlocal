@@ -120,12 +120,12 @@ export default function LogsPage() {
           </select>
         </label>
         <label className="field">
-          เหตุการณ์
+          ค้นหา
           <input
             className="input"
-            placeholder="เช่น ocr_run_error"
-            value={filters.event_type || ""}
-            onChange={(e) => filter("event_type", e.target.value)}
+            placeholder="ชื่อเอกสาร, Pipeline, เหตุการณ์"
+            value={filters.q || ""}
+            onChange={(e) => filter("q", e.target.value)}
           />
         </label>
         <label className="field">

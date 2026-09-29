@@ -153,6 +153,16 @@ export function DatasetFilters({
   );
 }
 export function caseState(record: TestCase) {
+  if(record.history_status){
+    const states: Record<string,{label:string;tone:string;code:string}>={
+      pending:{label:"รอดำเนินการ",tone:"neutral",code:"pending"},
+      error:{label:"ผิดพลาด",tone:"error",code:"error"},
+      partial:{label:"บาง Pipeline ผิดพลาด",tone:"warning",code:"partial"},
+      no_gt:{label:"รอ Ground Truth",tone:"warning",code:"no_gt"},
+      success:{label:"สำเร็จ",tone:"success",code:"success"},
+    };
+    if(states[record.history_status])return states[record.history_status];
+  }
   const latest = Object.values(
     Object.fromEntries(record.runs.map((r) => [r.pipeline_id, r])),
   );
@@ -165,7 +175,7 @@ export function caseState(record: TestCase) {
       tone: failures === latest.length ? "error" : "warning",
       code: failures === latest.length ? "error" : "partial",
     };
-  if (record.ground_truth_raw === null)
+    if (record.ground_truth_raw === null && !latest.some(r=>r.document_evaluation||r.fields?.some(f=>f.evaluation)))
     return { label: "รอ Ground Truth", tone: "warning", code: "no_gt" };
   return { label: "สำเร็จ", tone: "success", code: "success" };
 }

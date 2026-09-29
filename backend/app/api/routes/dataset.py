@@ -4,7 +4,9 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
-from app.api.dependencies import CaseServiceDep
+from app.api.dependencies import CaseServiceDep, SessionDep
+from app.core.errors import AppError
+from app.db.models import GlobalField, TestCase, now
 from app.schemas.contracts import DatasetExport
 from app.services.dataset_service import DatasetService
 
@@ -16,10 +18,21 @@ def samples(
     service: CaseServiceDep,
     category: str | None = None,
     document: UUID | None = None,
+    document_type: UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    return DatasetService(service).samples(category, document, limit, offset)
+    return DatasetService(service).samples(category, document, limit, offset, document_type)
+
+
+@router.delete("/items/{id}")
+def exclude_sample(id: UUID, session: SessionDep, kind: str = Query(pattern="^(field|case)$")):
+    record = session.get(GlobalField if kind == "field" else TestCase, str(id))
+    if record is None:
+        raise AppError("ไม่พบตัวอย่าง", 404)
+    record.dataset_excluded_at = record.dataset_excluded_at or now()
+    session.commit()
+    return {"excluded": True}
 
 
 @router.post("/export")

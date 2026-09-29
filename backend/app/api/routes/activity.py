@@ -3,23 +3,29 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.api.dependencies import SessionDep
-from app.db.models import AppLog
+from app.db.models import AppLog, Document, PipelineConfig
 
 router = APIRouter(prefix="/logs")
 
 
 @router.get("")
 def logs(session: SessionDep, level: Literal["INFO", "WARNING", "ERROR"] | None = None,
+         q: str | None = Query(default=None, max_length=200),
          event_type: str | None = Query(default=None, max_length=50),
          pipeline: str | None = Query(default=None, max_length=50),
          request_id: str | None = Query(default=None, max_length=100),
          test_case_id: UUID | None = None, date_from: datetime | None = None,
          date_to: datetime | None = None, limit: int = Query(default=25, ge=1, le=100),
          offset: int = Query(default=0, ge=0)):
-    query = select(AppLog)
+    query = select(AppLog).outerjoin(Document, Document.id == AppLog.document_id).outerjoin(PipelineConfig, PipelineConfig.pipeline_id == AppLog.pipeline_id)
+    # Same case-insensitive substring semantics as History; every word must match.
+    for token in (q or "").strip().split():
+        query = query.where(or_(*(column.icontains(token, autoescape=True) for column in (
+            Document.filename, PipelineConfig.name, AppLog.pipeline_id, AppLog.event_type,
+            AppLog.message, AppLog.level, AppLog.request_id))))
     for column, value in ((AppLog.level, level), (AppLog.event_type, event_type),
                           (AppLog.pipeline_id, pipeline),
                           (AppLog.test_case_id, str(test_case_id) if test_case_id else None)):

@@ -457,7 +457,6 @@ test("legacy compatibility: settings save and upstream connection test", async (
     .filter({
       has: page.getByRole("heading", { name: t("Mint Custom"), exact: true }),
     });
-  await expect(card.getByText(/ตั้งค่า API Key แล้ว:/)).toBeVisible();
   const enabled = card.getByLabel(t("Pipeline enabled"));
   await enabled.uncheck();
   await expect(

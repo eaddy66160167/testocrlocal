@@ -50,12 +50,23 @@ test_case_categories = Table(
 )
 
 
+class DocumentType(Base):
+    __tablename__ = "document_types"
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(100))
+    normalized_name: Mapped[str] = mapped_column(String(200), unique=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    system: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
     filename: Mapped[str] = mapped_column(String(255))
     mime_type: Mapped[str] = mapped_column(String(100))
     document_type: Mapped[str] = mapped_column(String(10), default="image", server_default="image")
+    document_type_id: Mapped[str | None] = mapped_column(ForeignKey("document_types.id"), nullable=True)
+    business_type: Mapped[DocumentType | None] = relationship(lazy="selectin")
     page_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     pdf_render_dpi: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width: Mapped[int] = mapped_column(Integer)
@@ -83,6 +94,7 @@ class TestCase(Base):
     ground_truth_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     ground_truth_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    dataset_excluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
     document: Mapped[Document] = relationship(lazy="selectin")
@@ -109,6 +121,7 @@ class GlobalField(Base):
     field_index: Mapped[int] = mapped_column(Integer)
     roi: Mapped[dict] = mapped_column(JSON_TYPE)
     source: Mapped[str] = mapped_column(String(10))
+    dataset_excluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ground_truth_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     ground_truth_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

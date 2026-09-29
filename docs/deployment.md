@@ -1,132 +1,44 @@
-# การพัฒนาและ deployment
+# Deployment and migration
 
-> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+## Existing release path
 
-## Release order and configuration evidence
+Local validation -> explicit source/test/docs commit -> normal GitHub main push -> existing Railway backend and Vercel frontend integrations. Both integrations reported successful deployments for Release A `941d356`. Verify fresh statuses for every release; this does not prove dashboard watch-path settings. Do not create duplicate manual deployments when auto-deploy is active.
 
-Before pushing main, inspect Railway/Vercel Git linkage, branch, root directory,
-watch paths and auto-deploy settings in the authenticated platforms. Roots described
-below are setup guidance, not evidence of current dashboard configuration.
-GitHub status checks for existing remote commit `c9c685e` report successful Railway
-and Vercel deployments, but do not prove current watch paths or auto-deploy settings.
+Backend health: https://ocrtest-production-095b.up.railway.app/api/health
 
-Release sequence: complete local validation → separate cleanup commit → verify
-Neon connectivity/revision and backup/PITR availability → normal additive Alembic
-upgrade to 0007 if needed → verify schema/existing data → normal push → verify
-both deployed SHAs/health → synthetic production smoke. Never reset production,
-change historical migrations or push before required schema compatibility.
+Frontend: https://ocrtest-sandy.vercel.app
 
-Migration 0007 only adds `test_cases.roi_source` (non-null, default `none`) and
-`ocr_fields` with its FK/unique constraint/index. It does not infer historical ROI
-origins or rewrite predictions/GT. Plan for normal PostgreSQL DDL locking; verify
-backup/PITR and avoid competing migration processes. If already at head, inspect
-schema rather than applying an unnecessary migration. Backup verification is a
-separate platform check; a successful database query does not prove recoverability.
+## Environment and storage
 
-On deployment failure inspect logs first (including OOM/restarts), stop the release,
-and identify whether the cause is code, schema, storage, environment or Gateway.
-Do not blindly change memory/settings or trigger duplicate deployments.
+Backend names: DATABASE_URL, MODEL_GATEWAY_BASE_URL, MODEL_GATEWAY_API_KEY, MODEL_GATEWAY_TIMEOUT_SECONDS, MODEL_GATEWAY_MAX_RESPONSE_MB, CORS_ORIGINS, STORAGE_MODE, STORAGE_PATH, MAX_UPLOAD_MB, MAX_IMAGE_PIXELS, MAX_IMAGE_DIMENSION, PDF_RENDER_DPI, MAX_PDF_PAGES.
 
-## Production: Vercel frontend และ backend ที่มี storage ถาวร
+Frontend public name: NEXT_PUBLIC_API_BASE_URL. This is embedded at build time; backend credentials must never be passed to frontend builds. The current features add no environment variables. Use private platform values, never credentials in commands/docs/logs. Gateway token quotes are optional in private dotenv; ordinary tokens can be unquoted with no spaces around `=`.
 
-Repository: https://github.com/jackchayapon/ocrtest, branch `main` ใช้ Vercel project เดิมถ้ามี ตั้ง Root Directory เป็น `frontend`, Framework เป็น Next.js และใช้ lockfile กับ `npm ci` / `npm run build` ไม่ deploy repository root เป็น FastAPI project
+Retain the persistent uploads volume and writable non-root container ownership. Neon records cannot reconstruct lost originals. Back up database and storage together. Next uses standalone output for Docker/local builds and native packaging on Vercel.
 
-Frontend ต้องมี `NEXT_PUBLIC_API_BASE_URL=<PRODUCTION_BACKEND_HTTPS_URL>` ที่เข้าถึงได้จริงก่อน deploy ห้ามใช้ localhost หรือเดา URL ห้ามใส่ `DATABASE_URL` หรือ `MODEL_GATEWAY_API_KEY` ใน Vercel frontend project
+## Migration procedure
 
-Backend ปัจจุบันใช้ LocalStorageService อ่าน/เขียน original uploads และ PDF ลง STORAGE_PATH เพื่อเปิดประวัติซ้ำ จึงต้องมี persistent disk/volume บน host ที่เหมาะสม ไม่สามารถใช้ filesystem ชั่วคราวของ Vercel Functions เป็น storage ถาวรได้ รอบนี้ไม่เปลี่ยนระบบ storage ดู [ข้อจำกัด runtime ของ Vercel](https://vercel.com/docs/functions/runtimes)
+Read the pending migration and confirm the intended database through the existing private environment. Validate first on isolated local PostgreSQL. Verify connectivity/current revision, available backup/PITR capabilities and existing record counts without printing connection strings. Release B adds `0009_document_types_dataset` (filename `0009_document_types_dataset_management.py`); the shorter revision fits Alembic's existing version column.
 
-ต้องเตรียม server-side environment ต่อไปนี้บน backend host โดยใช้ private production Neon connection string และ Gateway key ที่หมุนใหม่สำหรับ production ห้ามนำ development key ที่เคยเปิดเผยมาใช้โดยอัตโนมัติ:
-
-```ini
-DATABASE_URL=<PRIVATE_PRODUCTION_NEON_CONNECTION_STRING>
-MODEL_GATEWAY_BASE_URL=http://107.129.186.30:62051
-MODEL_GATEWAY_API_KEY=<FRESH_PRIVATE_PRODUCTION_KEY>
-MODEL_GATEWAY_TIMEOUT_SECONDS=240
-MODEL_GATEWAY_MAX_RESPONSE_MB=64
-STORAGE_MODE=local
-STORAGE_PATH=<PERSISTENT_VOLUME_MOUNT>/uploads
-MAX_UPLOAD_MB=20
-MAX_IMAGE_PIXELS=40000000
-MAX_IMAGE_DIMENSION=20000
-PDF_RENDER_DPI=200
-MAX_PDF_PAGES=500
-CORS_ORIGINS=<ACTUAL_FRONTEND_PRODUCTION_HTTPS_ORIGIN>
-```
-
-ใน Vercel ไป Project → Settings → Environment Variables: ช่อง Name ใส่ `NEXT_PUBLIC_API_BASE_URL` ช่อง Value ใส่ URL จริงอย่างเดียว ไม่ใส่ `NAME=` หรือเครื่องหมายคำพูด เลือก Production แล้ว deploy/redeploy ใหม่หลังแก้ค่า ตาม [เอกสาร environment variables](https://vercel.com/docs/environment-variables) หากตั้ง secrets บน backend platform ก็ใช้ช่อง Value เป็นค่าดิบ ไม่ครอบ quotes และไม่ส่ง secrets ไป Preview โดยไม่จำเป็น
-
-เมื่อได้ frontend URL จริงแล้วเพิ่ม origin นั้นใน CORS_ORIGINS ของ backend ไม่ใช้ wildcard แทนโดเมนที่ยังไม่ทราบ ก่อนประกาศ production พร้อมใช้ ตรวจ frontend `/` และ `/settings/pipelines`, backend `/api/health`, database/storage และ boolean key status โดยไม่พิมพ์ secrets
-
-Production frontend: https://ocrtest-sandy.vercel.app; backend health: https://ocrtest-production-095b.up.railway.app/api/health. ตรวจ deployment SHA และ health ใหม่ทุก release; URL เหล่านี้ไม่ใช่หลักฐานว่า release ล่าสุดสำเร็จแล้ว
-
-## สิ่งที่ deploy
-
-ใช้ frontend/backend images และ persistent uploads พร้อม DATABASE_URL ของ PostgreSQL/Neon ไม่ deploy model weights, source แพลตฟอร์ม Model API, Python venv, host node_modules หรือ test fixtures
-
-Backend เป็น Python 3.12 slim ลง dependencies ตาม requirements-runtime-lock.txt เท่านั้น ใช้ non-root UID 10001 ไม่มี pytest/Ruff ใน runtime Frontend ใช้ Node 24 แบบ multi-stage ส่งเพียง Next standalone/static/public ไป runtime ไม่มี Playwright หรือ test fixtures
-
-Pillow/OpenCV/NumPy ใช้จัดการภาพ, pypdfium2 ใช้ PDF จึงยังเป็น dependencies ที่จำเป็น ไม่มีเหตุผลให้เปลี่ยน stack หรือเพิ่ม local PaddleOCR ใช้ `pip check` และ lockfiles เพื่อทำซ้ำ build
-
-## Environment
-
-Gateway response มีขีดจำกัดแยกจาก upload: `MODEL_GATEWAY_MAX_RESPONSE_MB=64` (1–256 MB) นับ bytes ขณะ stream ก่อน parse JSON ค่า default คือ 64 MiB; เมื่อเกินคืน RESPONSE_TOO_LARGE ข้อความระบุผลตอบกลับ Gateway ไม่ใช่ขนาดภาพที่อัปโหลด ตัวแปรนี้เป็น backend-only
-
-Head ปัจจุบันคือ `0007_fields_roi_source`: เพิ่ม roi_source และ ocr_fields ต่อจาก 0006_ocr_error_events. ก่อน push ที่ trigger backend deployment ให้ตรวจ backup/PITR, migrate Neon ก่อน แล้วตรวจ revision/schema/data โดยไม่ reset/drop/truncate
-
-Batch ทำงานในคำขอ NDJSON ที่เปิดค้าง ไม่ใช้ distributed queue: ใช้ FastAPI หนึ่ง worker/หนึ่ง instance ตามการรันปัจจุบันเพื่อให้ lock รวม batch, single-run, Auto ROI และ delete มีผลร่วมกัน แต่ละหน้า await pipelines และ commit ผลก่อนหน้าถัดไป ห้ามเพิ่ม worker/replica โดยไม่เพิ่มการประสาน lock ระหว่าง process ไม่ปิดแท็บระหว่างรัน; หากการเชื่อมต่อขาดให้ตรวจ History/Logs ก่อนลองใหม่ ผลที่ commit แล้วจะยังอยู่
-
-App logs เก็บเฉพาะ event/IDs/สถานะ ไม่มี raw response/ภาพ/ข้อความ OCR/GT และไม่มี background retention worker แนะนำผู้ดูแลกำหนดอายุเก็บ 30 วันและล้างเฉพาะ app_logs ตามนโยบายองค์กร การลบ test case ไม่ลบ logs หรือ original document เพื่อรักษา audit และ PDF ที่ใช้งานร่วมกัน
-
-ดู [.env.example](../.env.example) สำหรับค่าครบ Backend อ่าน root .env แล้ว backend/.env; process env มีลำดับสูงกว่า DATABASE_URL และ MODEL_GATEWAY_API_KEY เป็น backend-only ค่า NEXT_PUBLIC_API_BASE_URL เป็น URL ที่ **browser** เข้าถึง FastAPI ได้และฝังตอน build
-
-ตัวแปรหลักสำหรับ production คือ `MODEL_GATEWAY_BASE_URL`, `MODEL_GATEWAY_API_KEY` และ `MODEL_GATEWAY_TIMEOUT_SECONDS` ทุก Pipeline ใช้ URL และ key ชุดนี้ร่วมกัน ไม่ต้องกำหนดตัวแปรการเชื่อมต่อหรือ credentials ราย Pipeline ส่วน endpoint/engine defaults seed เฉพาะ config ที่ยังไม่มี หากเปลี่ยน env หลังสร้าง records แล้ว ให้ตรวจ Pipeline Settings ด้วย ทุก Pipeline และ Auto ROI ใช้ MODEL_GATEWAY_API_KEY ตัวเดียว ไม่มี fallback key ราย Pipeline; Compose ส่ง key นี้เข้า backend ตอนรันเท่านั้น ไม่ส่งผ่าน build args
-
-ใส่ค่าจริงเฉพาะใน `.env` ส่วนตัว ตัวอย่างต่อไปนี้เป็น placeholders เท่านั้น ส่วน `.env.example` ต้องคง `MODEL_GATEWAY_API_KEY=` ว่างไว้เสมอ:
-
-```ini
-DATABASE_URL="YOUR_NEON_CONNECTION_STRING"
-
-MODEL_GATEWAY_BASE_URL=http://107.129.186.30:62051
-MODEL_GATEWAY_API_KEY=YOUR_GATEWAY_API_KEY
-MODEL_GATEWAY_TIMEOUT_SECONDS=240
-```
-
-สำหรับ Gateway token ปัจจุบัน แนะนำ `MODEL_GATEWAY_API_KEY=your_real_gateway_key` โดยไม่ต้องใส่เครื่องหมายคำพูด รูปแบบ `MODEL_GATEWAY_API_KEY="your_real_gateway_key"` ก็ใช้ได้สำหรับ token ทั่วไป เครื่องหมายคำพูดจึงเป็นทางเลือก ไม่ใช่ข้อบังคับ หากมีช่องว่างหรืออักขระพิเศษให้ใช้การครอบค่าตามรูปแบบ dotenv และอย่าเว้นวรรครอบ `=` เช่น หลีกเลี่ยง `MODEL_GATEWAY_API_KEY = abc123` ห้ามคัดลอก key จริง รหัสผ่าน Neon หรือ DATABASE_URL จริงลงเอกสาร
-
-Runtime และ Test Connection ใช้ `settings.model_gateway_base_url` เสมอ ค่า `pipeline_configs.base_url` เดิมเก็บไว้เพื่อ compatibility โดยไม่ใช้เลือกปลายทาง API ส่ง URL ที่มีผลจริงจาก shared environment การแก้ URL ราย Pipeline จึงไม่เปลี่ยนปลายทาง ให้เปลี่ยน `MODEL_GATEWAY_BASE_URL` แล้ว restart backend แทน ไม่ต้องเปลี่ยน schema หรือ reset records
-
-ถ้า DATABASE_URL ว่างจะใช้ PostgreSQL local ของ Compose ไม่ใช้ SQLite เป็น production fallback SQLite ใช้ใน isolated unit tests เท่านั้น เมื่อระบุ Neon แล้วเชื่อมต่อไม่ได้ backend จะแจ้งผิดพลาด ไม่เปลี่ยนฐานเอง
-
-## คำสั่ง Windows
-
-```powershell
-docker compose -p ocr-benchmark config --quiet
-docker compose -p ocr-benchmark up --build -d --wait
-curl.exe -f http://localhost:8000/api/health
-curl.exe -f http://localhost:3000
-docker compose -p ocr-benchmark exec backend python -m alembic check
-```
-
-Docker Desktop ต้องใช้ Linux engine หาก CLI config ใช้งานไม่ได้และ engine อยู่ที่ named pipe ของ Desktop ใช้ `docker --config .docker-local --host npipe:////./pipe/dockerDesktopLinuxEngine compose ...` เป็นตัวเลือกเฉพาะเครื่อง ไม่เปลี่ยน environment ของแอป หลีกเลี่ยงการพิมพ์ resolved compose config/full inspect เพราะอาจมี secrets
-
-Compose bind 3000/8000/5432 เฉพาะ loopback รหัส `ocr_local_dev` ใช้สำหรับ local PostgreSQL เท่านั้น ระบบ server ให้ใช้การป้องกันเครือข่าย/HTTPS ขององค์กร ตั้ง browser API URL และ CORS ให้ตรง deployment ไม่มี login เพิ่มใน MVP
-
-## Migration และ storage
-
-Startup เรียก Alembic upgrade head และ seed เฉพาะ records ที่ขาด Head ปัจจุบัน `0007_fields_roi_source`; migration 0004 ไม่ลบเอกสาร/case/prediction/metrics แต่ archive ผลสังเคราะห์เก่าออกจาก product responses/analytics รายละเอียดและการ downgrade อยู่ใน architecture
+Before pushing code that needs the new schema:
 
 ```powershell
 cd backend
+.venv/Scripts/python.exe -m alembic current
 .venv/Scripts/python.exe -m alembic upgrade head
 .venv/Scripts/python.exe -m alembic check
 ```
 
-สำรองฐานข้อมูลและ uploads คู่กัน ห้าม reset Neon หรือใช้ `docker compose down -v` กับข้อมูลที่ต้องเก็บ Native storage อยู่ backend/storage/uploads; Docker อยู่ volume ที่ /app/storage/uploads สองตำแหน่งนี้ไม่ใช่ชุดเดียวกันแม้ใช้ Neon เดียวกัน หากย้ายการรันให้คัดลอก originals ที่ถูกต้องผ่าน `docker cp` และตรวจ storage_key ก่อนเปิดใช้
+Use the intended DATABASE_URL only through the secure environment. Verify head and existing data afterwards. Startup also checks head and seeds missing types/pipelines; it does not rerun an already-applied revision. Never reset/drop/truncate production, edit historical revisions or apply a speculative downgrade. If migration fails, stop before pushing.
 
-ไฟล์ภาพถาวร/PDF ผ่าน StorageService ส่วน crop และ PDF raster อยู่ memory ต้องให้ UID 10001 เขียน mount ได้ ห้าม bake uploads หรือ .env เข้า image
+## Validation and smoke
 
-## ตรวจสอบก่อนส่งงาน
+Run targeted pytest/Playwright for affected behavior plus Ruff, TypeScript, ESLint, build and diff/secret checks. Only run a full regression when changes or failures justify it. Keep .env, .runtime, generated test outputs, screenshots and source documents out of Git.
 
-รัน `scripts/check.ps1` สำหรับ pytest/Ruff/typecheck/lint/build และเพิ่ม `-Browser` เมื่อกำหนด TEST_DATABASE_URL เป็นฐาน local *_test แล้ว สคริปต์ e2e ใช้ port 8100/3100 และ production Next build พร้อม test-only HTTP interception; ไม่ส่งข้อมูลทดสอบเข้า Neon
+After push, verify Railway/Vercel statuses for the exact commit, then health (database connected/storage ready), pipeline registration and frontend load. A short synthetic smoke covers document type create/archive, type persistence, one selected successful OCR result/evaluation, History success, latest-first Dataset and safe exclusion, partial log search, and desktop/mobile rendering. Reuse saved synthetic results for non-OCR checks; do not repeatedly call models.
 
-ตรวจ health, upload/storage และหน้า browser หลัง build ใช้ MODEL_GATEWAY_API_KEY จาก runtime เท่านั้น Hutch Full Auto/none ส่งภาพเต็ม; Manual crop ภายใน adapter ดูผลจริงล่าสุดใน validation.md
+On a serious error stop further release actions, inspect non-sensitive logs and identify the cause. Keep a healthy earlier release deployed if the next release is blocked. Never claim backup or deployment verification that was unavailable.
+
+## Operational limits
+
+Run one backend worker/instance until cross-process job locks are implemented. Long PDF batches use an active NDJSON connection; after disconnect check History before retrying. Logs omit OCR/GT and secrets but need an operator retention policy. Production access control is supplied by the deployment/network; this app has no login layer.

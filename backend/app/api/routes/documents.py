@@ -1,8 +1,9 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, File, Query, Request, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 
 from app.api.dependencies import CaseServiceDep, SessionDep
 from app.core.errors import AppError
@@ -13,6 +14,24 @@ from app.services.log_service import LogService
 from app.services.serializers import document_json
 
 router = APIRouter(prefix="/documents")
+
+
+class DocumentTypeUpdate(BaseModel):
+    document_type_id: UUID | None = None
+
+
+@router.put("/{document_id}/type")
+def update_document_type(document_id: UUID, data: DocumentTypeUpdate, service: CaseServiceDep,
+                         page_number: int | None = Query(default=None, ge=1)):
+    from app.services.document_type_service import active_type
+    record = service.repository.document(str(document_id))
+    id = str(data.document_type_id) if data.document_type_id else None
+    if id:
+        active_type(service.repository.session, id)
+    record.document_type_id = id
+    service.repository.save(record)
+    service.repository.session.expire(record, ["business_type"])
+    return service.page_metadata(str(document_id), page_number)
 
 
 @router.post("/{document_id}/auto-rois")
@@ -52,11 +71,13 @@ async def run_pages(document_id: UUID, data: BatchRequest, request: Request, ses
 
 
 @router.post("", status_code=201)
-async def upload_document(request: Request, service: CaseServiceDep, file: UploadFile = File(...)):
+async def upload_document(request: Request, service: CaseServiceDep, file: UploadFile = File(...),
+                          document_type_id: UUID | None = Form(default=None)):
     try:
         data = await file.read(request.app.state.settings.max_upload_mb * 1024 * 1024 + 1)
         return document_json(
-            service.upload(data, file.filename or "document.png", file.content_type or "")
+            service.upload(data, file.filename or "document.png", file.content_type or "",
+                           str(document_type_id) if document_type_id else None)
         )
     finally:
         await file.close()

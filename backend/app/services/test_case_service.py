@@ -21,7 +21,10 @@ class TestCaseService:
         self.pdfs = PdfService(settings)
         self.logs = LogService(session, settings)
 
-    def upload(self, data: bytes, filename: str, mime: str) -> Document:
+    def upload(self, data: bytes, filename: str, mime: str, document_type_id=None) -> Document:
+        if document_type_id:
+            from app.services.document_type_service import active_type
+            active_type(self.repository.session, document_type_id)
         is_pdf = mime == "application/pdf" or (
             mime in {"", "application/octet-stream"} and filename.lower().endswith(".pdf")
         )
@@ -42,6 +45,7 @@ class TestCaseService:
             filename=filename,
             mime_type="application/pdf" if is_pdf else "image/png",
             document_type="pdf" if is_pdf else "image",
+            document_type_id=document_type_id,
             page_count=first.page_count if is_pdf else 1,
             pdf_render_dpi=self.settings.pdf_render_dpi if is_pdf else None,
             width=width,

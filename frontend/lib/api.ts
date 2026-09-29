@@ -44,7 +44,7 @@ export const getCategories = () => request<Category[]>("/categories");
 export const getPipelines = () => request<PipelineConfig[]>("/pipelines");
 export const updatePipeline = (id: string, value: Partial<PipelineConfig>) => request<PipelineConfig>(`/pipelines/${id}`, { method: "PUT", body: JSON.stringify(value) });
 export const testConnection = (id: string) => request<{ status: string; message: string }>(`/pipelines/${id}/test-connection`, { method: "POST" });
-export const uploadDocument = (file: File) => { const form = new FormData(); form.set("file", file); return request<Document>("/documents", { method: "POST", body: form }); };
+export const uploadDocument = (file: File, documentTypeId?: string) => { const form = new FormData(); form.set("file", file); if(documentTypeId)form.set("document_type_id",documentTypeId); return request<Document>("/documents", { method: "POST", body: form }); };
 export const createTestCase = (input: TestCaseInput) => request<TestCase>("/test-cases", { method: "POST", body: JSON.stringify(input) });
 export const getTestCase = (id: string) => request<TestCase>(`/test-cases/${id}`);
 export const deleteTestCase = (id: string) => request<void>(`/test-cases/${id}`, { method: "DELETE" });
@@ -79,7 +79,7 @@ export const getCategoryAnalytics = (filters?: QueryFilters) => request<Category
 export type ErrorGroup = { pipeline_id: string; error_type: string; ground_truth_unit: string | null; ocr_unit: string | null; count: number; test_case_count: number; cases: { id: string; document_id: string; filename: string; page_number: number | null; categories: string[] }[] };
 export const getErrorAnalysis = (params: URLSearchParams) => request<{ total: number; items: ErrorGroup[] }>(`/analytics/errors?${params}`);
 export const recomputeErrors = (id: string) => request<{ recomputed_runs: number }>(`/test-cases/${id}/errors/recompute`, { method: "POST" });
-export type DatasetSample = { id: string; test_case_id?: string; global_field_id?: string | null; field_index?: number | null; document_id: string; filename: string; page_number: number | null; roi: import("@/types").ROI; ground_truth_raw: string; updated_at: string; source_sha256: string | null; categories: string[]; source_available?: boolean };
+export type DatasetSample = { document_type_id?: string | null; document_type_name?: string | null; id: string; test_case_id?: string; global_field_id?: string | null; field_index?: number | null; document_id: string; filename: string; page_number: number | null; roi: import("@/types").ROI; ground_truth_raw: string; updated_at: string; source_sha256: string | null; categories: string[]; source_available?: boolean };
 export const getDatasetSamples = (params: URLSearchParams) => request<{ total: number; items: DatasetSample[] }>(`/dataset/samples?${params}`);
 export async function exportDataset(test_case_ids: string[]) {
   const response = await fetch(`${API_BASE_URL}/api/dataset/export`, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test_case_ids: test_case_ids.filter(id=>!id.startsWith("field:")).map(id=>id.replace(/^case:/,"")), global_field_ids: test_case_ids.filter(id=>id.startsWith("field:")).map(id=>id.slice(6)) }) });
@@ -97,3 +97,10 @@ export const saveGlobalLayout = (id: string, fields: import("@/types").GlobalFie
 export const saveGlobalGT = (caseId: string, field: import("@/types").GlobalField) => request<TestCase>(`/test-cases/${caseId}/global-fields/${field.id}/ground-truth`, {method:"PUT",body:JSON.stringify({ground_truth_raw:field.ground_truth_raw ?? ""})});
 export const setEvaluationMode = (caseId: string, mode: import("@/types").EvaluationMode) => request<TestCase>(`/test-cases/${caseId}/evaluation-mode`, {method:"PUT",body:JSON.stringify({mode})});
 export const evaluateGlobal = (caseId: string, mode: import("@/types").EvaluationMode | "auto", global_field_ids: string[] = []) => request<TestCase>(`/test-cases/${caseId}/evaluate`, {method:"POST",body:JSON.stringify({mode,global_field_ids})});
+
+export const getDocumentTypes = () => request<import("@/types").DocumentType[]>("/document-types");
+export const createDocumentType = (name: string) => request<import("@/types").DocumentType>("/document-types", {method:"POST", body:JSON.stringify({name})});
+export const archiveDocumentType = (id: string) => request<import("@/types").DocumentType>(`/document-types/${id}`, {method:"DELETE"});
+export const excludeDatasetSample = (id: string, kind: "field" | "case") => request<{excluded: boolean}>(`/dataset/items/${id}?kind=${kind}`, {method:"DELETE"});
+
+export const updateDocumentType = (id: string, typeId: string, page?: number | null) => request<Document>(`/documents/${id}/type${page?`?page_number=${page}`:""}`, {method:"PUT",body:JSON.stringify({document_type_id:typeId||null})});

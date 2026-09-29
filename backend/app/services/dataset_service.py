@@ -15,8 +15,8 @@ class DatasetService:
         self.cases = cases
         self.repository = DatasetRepository(cases.repository.session)
 
-    def samples(self, category, document, limit, offset):
-        total, records = self.repository.samples(category, document, limit, offset)
+    def samples(self, category, document, limit, offset, document_type=None):
+        total, records = self.repository.samples(category, document, limit, offset, document_type)
         return dict(
             total=total,
             items=[
@@ -27,6 +27,8 @@ class DatasetService:
                     field_index=getattr(c, "field_index", None),
                     document_id=c.document_id,
                     filename=c.document.filename,
+                    document_type_id=c.document.document_type_id,
+                    document_type_name=c.document.business_type.name if c.document.business_type else None,
                     page_number=c.page_number,
                     roi=c.roi,
                     ground_truth_raw=c.ground_truth_raw,

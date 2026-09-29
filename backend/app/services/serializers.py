@@ -42,6 +42,8 @@ def document_json(record, page_number=None, page_size=None):
         "width": page_size[0] if page_size else record.width,
         "height": page_size[1] if page_size else record.height,
         "document_type": record.document_type,
+        "document_type_id": record.document_type_id,
+        "document_type_name": record.business_type.name if record.business_type else None,
         "page_count": record.page_count,
         "pdf_render_dpi": record.pdf_render_dpi,
         "page_number": selected,
@@ -117,6 +119,19 @@ def run_json(record):
     }
 
 
+def history_status(record):
+    latest = {r.pipeline_id: r for r in record.runs if not r.archived}
+    if not latest:
+        return "pending"
+    successes = [r for r in latest.values() if r.status == "success"]
+    if not successes:
+        return "error"
+    if len(successes) != len(latest):
+        return "partial"
+    evaluated = any(r.document_evaluation or any(f.evaluation for f in r.fields) or (record.ground_truth_raw is not None and r.metric_records) for r in successes)
+    return "success" if evaluated else "no_gt"
+
+
 def test_case_json(record):
     return {
         "id": record.id,
@@ -138,6 +153,7 @@ def test_case_json(record):
         "ground_truth_raw": record.ground_truth_raw,
         "ground_truth_normalized": record.ground_truth_normalized,
         "status": record.status,
+        "history_status": history_status(record),
         "created_at": timestamp(record.created_at),
         "updated_at": timestamp(record.updated_at),
         "categories": [category_json(category) for category in record.categories],

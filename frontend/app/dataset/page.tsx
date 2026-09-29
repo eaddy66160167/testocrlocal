@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import * as api from "@/lib/api";
-import type { Category } from "@/types";
+import type { Category, DocumentType } from "@/types";
 import { categoryLabel, userError } from "@/lib/i18n/th";
 import { PageHeader, EmptyState, LoadingState } from "@/components/ConsoleUI";
 
@@ -13,6 +13,10 @@ export default function DatasetPage() {
     items: api.DatasetSample[];
   }>({ total: 0, items: [] });
   const [categories, setCategories] = useState<Category[]>([]);
+  const [types,setTypes]=useState<DocumentType[]>([]),[documentType,setDocumentType]=useState("");
+  const [removing,setRemoving]=useState<api.DatasetSample|null>(null),[removeBusy,setRemoveBusy]=useState(false);
+  const removeDialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{if(removing)removeDialog.current?.showModal();else removeDialog.current?.close();},[removing]);
   const [category, setCategory] = useState(""),
     [documentId, setDocumentId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -34,13 +38,16 @@ export default function DatasetPage() {
         });
         if (category) params.set("category", category);
         if (documentId) params.set("document", documentId);
-        const [samples, tags] = await Promise.all([
+        if (documentType) params.set("document_type",documentType);
+        const [samples, tags, kinds] = await Promise.all([
           api.getDatasetSamples(params),
           api.getCategories(),
+          api.getDocumentTypes(),
         ]);
         if (active) {
           setData(samples);
           setCategories(tags);
+          setTypes(kinds);
         }
       } catch (e) {
         if (active)
@@ -57,7 +64,8 @@ export default function DatasetPage() {
     return () => {
       active = false;
     };
-  }, [category, documentId, offset, revision]);
+  }, [category, documentId, documentType, offset, revision]);
+  async function remove(){if(!removing)return;setRemoveBusy(true);try{await api.excludeDatasetSample(removing.id,removing.global_field_id?"field":"case");setSelected(old=>old.filter(id=>id!==removing.id&&id!==`field:${removing.id}`));setRemoving(null);setRevision(v=>v+1);}catch(e){setError(userError(e instanceof Error?e.message:"ลบไม่สำเร็จ"));}finally{setRemoveBusy(false);}}
   async function download() {
     setExporting(true);
     setError("");
@@ -83,7 +91,7 @@ export default function DatasetPage() {
     <div className="page-stack">
       <PageHeader
         title="Dataset Builder"
-        description="ภาพ crop จากต้นฉบับ + Ground Truth ที่ยืนยันแล้ว · ไม่ใช้ข้อความ OCR เป็น label"
+        description="ตัวอย่างที่ยืนยัน Ground Truth แล้ว · เรียงล่าสุดก่อน"
         actions={
           <button
             className="button primary"
@@ -96,6 +104,7 @@ export default function DatasetPage() {
       />
       <section className="panel panel-body">
         <div className="flex flex-wrap items-end gap-3">
+          <label>ประเภทเอกสาร<select className="select" value={documentType} onChange={e=>{setDocumentType(e.target.value);setOffset(0);setSelected([]);}}><option value="">ทั้งหมด</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <label>
             ประเภทข้อมูล
             <select
@@ -195,6 +204,7 @@ export default function DatasetPage() {
                     <th>ต้นฉบับ</th>
                     <th>Confirmed Ground Truth</th>
                     <th>ประเภท</th>
+                    <th><span className="sr-only">จัดการ</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,6 +247,7 @@ export default function DatasetPage() {
                         <Link className="mini-link" href={`/test/${sample.test_case_id ?? sample.id}`}>
                           {sample.filename}{sample.field_index ? ` · Field ${String(sample.field_index).padStart(2,"0")}` : ""}
                         </Link>
+                        <p className="muted text-xs">{sample.document_type_name||"ไม่ระบุประเภท"}</p>
                         <p className="muted">
                           {sample.page_number
                             ? `หน้า ${sample.page_number} · `
@@ -258,6 +269,7 @@ export default function DatasetPage() {
                           )
                           .join(", ") || "—"}
                       </td>
+                      <td><button className="button small secondary" disabled={exporting} onClick={()=>setRemoving(sample)}>ลบออกจาก Dataset</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -290,6 +302,7 @@ export default function DatasetPage() {
           />
         ))
       )}
+      <dialog ref={removeDialog} role="alertdialog" aria-labelledby="remove-dataset-title" className="rounded-xl p-5 w-[min(28rem,calc(100%-2rem))] backdrop:bg-black/30" onCancel={e=>{if(removeBusy)e.preventDefault();else setRemoving(null);}}><h2 id="remove-dataset-title">นำรายการนี้ออกจาก Dataset Builder หรือไม่?</h2><p className="muted mt-2">เอกสาร ประวัติ และ Ground Truth ยังคงอยู่</p>{error&&<p role="alert">{error}</p>}<div className="flex gap-2 mt-4"><button className="button secondary" autoFocus disabled={removeBusy} onClick={()=>setRemoving(null)}>ยกเลิก</button><button className="button" disabled={removeBusy} onClick={()=>void remove()}>ยืนยันนำออก</button></div></dialog>
     </div>
   );
 }

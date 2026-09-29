@@ -271,17 +271,7 @@ function PipelineCard({ pipeline }: { pipeline: PipelineConfig }) {
                 </span>
               </span>
             </label>
-            <div className="text-xs text-slate-500">
-              <span className="block font-medium">
-                {t("API Key configured:")}{" "}
-                {saved.api_key_configured ? t("Yes") : t("No")}
-              </span>
-              <span className="mt-1 block text-[10px]">
-                {t(
-                  "Mint / Hutch Crop / Benchmark ใช้ ROI crop; Hutch Full ใช้ภาพเต็มเมื่อ Auto ROI และใช้ crop เมื่อ Manual ROI",
-                )}
-              </span>
-            </div>
+
           </div>
           {!form.base_url.trim() && (
             <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-amber-700">
