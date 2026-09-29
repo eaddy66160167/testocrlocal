@@ -12,6 +12,8 @@ test("legacy compatibility: selected PDF pages run separately; logs and confirme
     await request.put(`${backend}/api/pipelines/${id}`, {
       data: { enabled: true },
     });
+  const configs = await (await request.get(`${backend}/api/pipelines`)).json();
+  const enabled = configs.filter((c: {enabled: boolean}) => c.enabled);
   await openLegacyWorkspace(page);
   const uploaded = page.waitForResponse(
     (r) =>
@@ -54,7 +56,7 @@ test("legacy compatibility: selected PDF pages run separately; logs and confirme
     const saved = await (
       await request.get(`${backend}/api/test-cases/${id}`)
     ).json();
-    expect(saved.runs).toHaveLength(5);
+    expect(saved.runs).toHaveLength(enabled.length);
     expect(saved.ground_truth_raw).toBeNull();
   }
   await page.goto(`/logs?test_case_id=${cases[0]}`);
@@ -63,7 +65,7 @@ test("legacy compatibility: selected PDF pages run separately; logs and confirme
   ).toBeVisible();
   await expect(
     page.getByRole("cell", { name: "ocr_run_success", exact: true }),
-  ).toHaveCount(5);
+  ).toHaveCount(enabled.length);
   await page.getByLabel("ระดับ", { exact: true }).selectOption("ERROR");
   await expect(
     page.getByRole("cell", { name: "ocr_run_success", exact: true }),

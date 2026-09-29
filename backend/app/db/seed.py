@@ -68,4 +68,12 @@ def seed_database(session, settings: Settings):
             query_params={"version": "6", "model": "thai_ft_v2"},
             request_format="multipart", file_field_name="images",
         ))
+    if "hutch_fine_tune_v2" not in existing_pipelines:
+        session.add(PipelineConfig(
+            pipeline_id="hutch_fine_tune_v2", name="Hutch fine tune v2",
+            base_url=settings.model_gateway_base_url,
+            endpoint="/api/v1/text-recognition-batches", engine="rec_v5_thai_ft_v2",
+            query_params={"version": "5", "model": "thai_ft_v2"},
+            request_format="multipart", file_field_name="images",
+        ))
     session.commit()

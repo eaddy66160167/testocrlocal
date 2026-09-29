@@ -5,7 +5,13 @@ from uuid import uuid4
 
 from app.integrations.model_gateway import GatewayError
 from app.pipelines.base import CropInputAdapter
-from app.pipelines.normalizers import MintResultNormalizer, average, bounded_text, number
+from app.pipelines.normalizers import (
+    MintResultNormalizer,
+    average,
+    bounded_text,
+    number,
+    recognition_items,
+)
 
 DETECTION_ENDPOINT = "/api/v1/text-detection-batches"
 RECOGNITION_ENDPOINT = "/api/v1/text-recognition-batches"
@@ -113,31 +119,8 @@ class BenchmarkPipelineAdapter(CropInputAdapter):
                         request_id=f"{request_id}_rec_{len(recognition_batches)}",
                     )
                 )
-                recognized = recognition["data"]
-                items = recognized.get("results") if isinstance(recognized, dict) else None
-                if (
-                    not isinstance(items, list)
-                    or len(items) != len(batch)
-                    or recognized.get("count") != len(batch)
-                ):
-                    raise invalid("Recognition result count does not match line crops")
-                # Verified leaf envelope now uses rec_text/rec_score. Keep the
-                # earlier text/confidence response supported without altering raw data.
-                leaf_recognition = (
-                    recognized.get("contract_version") == "leaf-inference-v1"
-                    and recognized.get("kind") == "text_recognition_batch"
-                )
-                for index, item in enumerate(items):
-                    if not isinstance(item, dict):
-                        raise invalid("Invalid recognition result")
-                    lines.append(
-                        dict(
-                            polygon=batch[index],
-                            det_score=scores[start + index],
-                            text=bounded_text(item.get("rec_text" if leaf_recognition else "text")),
-                            rec_score=item.get("rec_score" if leaf_recognition else "confidence"),
-                        )
-                    )
+                for index, item in enumerate(recognition_items(recognition["data"], len(batch))):
+                    lines.append(dict(polygon=batch[index], det_score=scores[start + index], **item))
                 recognition_batches.append(recognition)
         text = bounded_text("\n".join(line["text"] for line in lines))
         responses = [detection, *recognition_batches]

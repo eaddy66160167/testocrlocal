@@ -199,6 +199,7 @@ class ModelGatewayClient:
             "hutch_crop": "unknown",
             "hutch_full": "unknown",
             "benchmark": "unknown",  # Readiness currently does not report the leaf DET/REC services.
+            "hutch_fine_tune_v2": "unknown",
             "thai_ft_v2": "unknown",  # No variant-specific readiness is reported upstream.
             "auto_roi": "unknown",
             "api_key_configured": bool(self.key),
@@ -216,7 +217,7 @@ class ModelGatewayClient:
                     return {
                         **output,
                         **dict.fromkeys(
-                            ("mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2", "auto_roi"), "not_authenticated"
+                            ("mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2", "hutch_fine_tune_v2", "auto_roi"), "not_authenticated"
                         ),
                         "message": "Readiness requires valid Gateway authentication.",
                     }

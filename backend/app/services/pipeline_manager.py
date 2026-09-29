@@ -5,6 +5,7 @@ from app.db.models import PipelineRun
 from app.integrations.model_gateway import GatewayError
 from app.pipelines.benchmark import BenchmarkPipelineAdapter
 from app.pipelines.hutch_crop import HutchCropPipelineAdapter
+from app.pipelines.hutch_fine_tune_v2 import HutchFineTuneV2PipelineAdapter
 from app.pipelines.hutch_full import HutchFullPipelineAdapter
 from app.pipelines.mint import MintPipelineAdapter
 from app.pipelines.thai_ft_v2 import ThaiFTV2PipelineAdapter
@@ -18,6 +19,7 @@ class PipelineManager:
         "hutch_full": HutchFullPipelineAdapter,
         "benchmark": BenchmarkPipelineAdapter,
         "thai_ft_v2": ThaiFTV2PipelineAdapter,
+        "hutch_fine_tune_v2": HutchFineTuneV2PipelineAdapter,
     }
 
     def __init__(self, settings):

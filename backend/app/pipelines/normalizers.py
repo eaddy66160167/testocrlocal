@@ -184,3 +184,18 @@ class PaddleResultNormalizer:
             meta.get("det_model"),
             meta.get("rec_model"),
         )
+
+
+def recognition_items(data, count):
+    """Shared verified batch REC parser; retain upstream order and raw payload elsewhere."""
+    items = data.get("results") if isinstance(data, dict) else None
+    if not isinstance(items, list) or len(items) != count or data.get("count") != count:
+        raise GatewayError("Recognition result count does not match line crops", "INVALID_OCR_RESPONSE")
+    leaf = data.get("contract_version") == "leaf-inference-v1" and data.get("kind") == "text_recognition_batch"
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise GatewayError("Invalid recognition result", "INVALID_OCR_RESPONSE")
+        result.append(dict(text=bounded_text(item.get("rec_text" if leaf else "text")),
+                           rec_score=item.get("rec_score" if leaf else "confidence")))
+    return result

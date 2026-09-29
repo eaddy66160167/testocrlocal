@@ -170,7 +170,7 @@ def test_roi_fields_persistence_and_dynamic_views(client, document, source):
 
 def test_registration_fixed_settings_and_unknown_readiness(client):
     configs = client.get("/api/pipelines").json()
-    assert {c["pipeline_id"] for c in configs} == {"mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2"}
+    assert {c["pipeline_id"] for c in configs} == {"mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2", "hutch_fine_tune_v2"}
     config = next(c for c in configs if c["pipeline_id"] == "thai_ft_v2")
     assert config["query_params"] == {"version": "6", "model": "thai_ft_v2"}
     assert config["file_field_name"] == "images" and config["name"] == "Thai FT v2"

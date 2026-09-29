@@ -2,7 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import type { TestCase, PipelineRun } from "../types";
 const api=process.env.E2E_API_URL||"http://127.0.0.1:8100";
-const ids=['mint','hutch_crop','hutch_full','benchmark','thai_ft_v2'];
+const ids=['mint','hutch_crop','hutch_full','benchmark','thai_ft_v2','hutch_fine_tune_v2'];
 async function upload(page:Page,pdf=false){
  await page.goto('/');await expect(page.getByTestId('workflow-upload')).toBeVisible();
  const pending=page.waitForResponse(r=>r.url().endsWith('/api/documents')&&r.request().method()==='POST');
@@ -19,7 +19,7 @@ async function confirm(page:Page){
 async function run(page:Page){
  const pending=page.waitForResponse(r=>r.url().endsWith('/run')&&r.request().method()==='POST');
  await page.getByRole('button',{name:'Run OCR',exact:true}).click();const result=await(await pending).json();
- expect(result.runs).toHaveLength(5);expect(result.runs.every((r:PipelineRun)=>r.status==='success')).toBeTruthy();
+ expect(result.runs).toHaveLength(ids.length);expect(result.runs.every((r:PipelineRun)=>r.status==='success')).toBeTruthy();
  await expect(page).toHaveURL(/\/ground-truth$/);await expect(page.getByTestId('field-gt-input').first()).toBeVisible();return result;
 }
 async function draw(page:Page,a:[number,number],b:[number,number],w=1000,h=1320){
@@ -28,6 +28,22 @@ async function draw(page:Page,a:[number,number],b:[number,number],w=1000,h=1320)
  await page.mouse.move(x+a[0]*scale,y+a[1]*scale);await page.mouse.down();await page.mouse.move(x+b[0]*scale,y+b[1]*scale,{steps:12});await page.mouse.up();
 }
 test.beforeEach(async({request})=>{for(const id of ids)expect((await request.put(`${api}/api/pipelines/${id}`,{data:{enabled:true}})).ok()).toBeTruthy();});
+
+test('Hutch fine tune v2 shares four-page workflow, busy state and result blocks with Mint',async({page,request})=>{
+ await upload(page);await detect(page);const c=await confirm(page);
+ const options=page.getByTestId('pipeline-options');
+ for(const label of ['Hutch Crop','Hutch Full','Benchmark','Thai FT v2'])await options.getByRole('checkbox',{name:`เลือก ${label}`,exact:true}).uncheck();
+ const selected=options.getByRole('checkbox',{name:'เลือก Hutch fine tune v2',exact:true});await expect(selected).toBeChecked();
+ let release!:()=>void;const gate=new Promise<void>(resolve=>{release=resolve;});
+ await page.route('**/api/test-cases/*/run',async route=>{await gate;await route.continue();});
+ await page.getByRole('button',{name:'Run OCR',exact:true}).click();await expect(selected).toBeDisabled();await expect(page.getByTestId('ocr-spinner')).toBeVisible();release();
+ await expect(page).toHaveURL(/\/ground-truth$/);
+ const card=page.getByTestId('global-result-hutch_fine_tune_v2');await expect(card).toContainText('Hutch fine tune v2');
+ await expect(card.getByRole('region',{name:'Extracted Text',exact:true})).toBeVisible();await expect(card.getByRole('region',{name:'Metrics',exact:true})).toBeVisible();
+ await page.getByLabel('Ground Truth Field 01').fill('ภาษาไทย');await page.getByRole('button',{name:'ยืนยันเพื่อคำนวณ',exact:true}).click();await expect(card.getByTestId('global-evaluation')).toBeVisible();await expect(card.getByText('Error Analysis',{exact:true})).toBeVisible();
+ const saved=await(await request.get(`${api}/api/test-cases/${c.id}`)).json();expect(saved.runs.map((r:PipelineRun)=>r.pipeline_id).sort()).toEqual(['hutch_fine_tune_v2','mint']);
+ await page.reload();await expect(card.getByTestId('global-evaluation')).toBeVisible();
+});
 
 test('Run OCR shows immediate busy feedback, blocks duplicates and restores after failure',async({page})=>{
  await upload(page);await detect(page);await confirm(page);
@@ -141,8 +157,8 @@ test('image upload refresh, bulk layout selection and safe back navigation prese
  await page.reload();await expect(page.getByAltText('เอกสารที่อัปโหลด')).toBeVisible();await expect(page.getByTestId('workflow-upload').getByRole('alert')).toHaveCount(0);await expect(page).toHaveURL(new RegExp(`document=${doc.id}$`));
  await page.goto(`/workflow/${c.id}/layout`);await page.getByRole('button',{name:'กลับไปแก้ไข Layout',exact:true}).click();
  await expect(page.getByRole('button',{name:'เพิ่มกรอบ Manual',exact:true})).toBeVisible();await confirm(page);
- // A subset selection must really produce a single run, rather than always all five.
- for(const label of ['Hutch Crop','Hutch Full','Benchmark','Thai FT v2'])await page.getByRole('checkbox',{name:`เลือก ${label}`,exact:true}).uncheck();
+ // A subset selection must really produce a single run, rather than always all configured pipelines.
+ for(const label of ['Hutch Crop','Hutch Full','Benchmark','Thai FT v2','Hutch fine tune v2'])await page.getByRole('checkbox',{name:`เลือก ${label}`,exact:true}).uncheck();
  await page.getByRole('button',{name:'Run OCR',exact:true}).click();await expect(page).toHaveURL(/\/ground-truth$/);
  const historical=await(await request.get(`${api}/api/test-cases/${c.id}`)).json();expect(historical.runs.map((r:PipelineRun)=>r.pipeline_id)).toEqual(['mint']);
  await page.getByRole('link',{name:/2\. Global Layout/}).click();await page.getByRole('button',{name:'สร้างชุดทดสอบใหม่เพื่อแก้ Layout',exact:true}).click();

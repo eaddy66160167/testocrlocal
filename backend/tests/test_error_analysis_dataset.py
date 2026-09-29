@@ -195,10 +195,11 @@ def test_dataset_invalid_ids_missing_roi_and_missing_source(client, case, docume
 
 
 def test_future_config_is_iterable_without_invented_adapter(client, case):
+    count = len(client.get("/api/pipelines").json())
     with client.app.state.database.session_factory() as session:
         session.add(PipelineConfig(pipeline_id="future", name="Future", enabled=False))
         session.commit()
-    assert len(client.get("/api/pipelines").json()) == 6
+    assert len(client.get("/api/pipelines").json()) == count + 1
     response = client.post(
         f"/api/test-cases/{case['id']}/run",
         json={"pipelines": ["mint", "hutch_crop", "hutch_full", "future"]},

@@ -84,7 +84,7 @@ for (const imageFile of [
       .getByLabel(t("What should the document say?"))
       .fill("บริษัท ซีดีจี จำกัด");
     await page.getByRole("button", { name: /^ข้อความภาษาไทย$/ }).click();
-    for (const name of [t("Mint Custom"), "Hutch Crop", "Hutch Full", "Benchmark", "Thai FT v2"]) {
+    for (const name of [t("Mint Custom"), "Hutch Crop", "Hutch Full", "Benchmark", "Thai FT v2", "Hutch fine tune v2"]) {
       await expect(
         page.getByLabel(`เลือก ${name}`, { exact: true }),
       ).toBeChecked();
@@ -98,14 +98,8 @@ for (const imageFile of [
       .getByRole("button", { name: t("Run all pipelines"), exact: true })
       .click();
     const result = await (await responsePromise).json();
-    expect(result.runs).toHaveLength(5);
-    expect(result.runs.map((run: PipelineRun) => run.status)).toEqual([
-      "success",
-      "success",
-      "success",
-      "success",
-      "success",
-    ]);
+    expect(result.runs).toHaveLength(configs.length);
+    expect(result.runs.map((run: PipelineRun) => run.status)).toEqual(configs.map(() => "success"));
     expect(result.runs[2].status).toBe("success");
     const hashes = result.runs
       .slice(0, 2)
@@ -185,13 +179,13 @@ for (const imageFile of [
       t("Total / Gateway"),
       t("Gateway request ID"),
     ]) {
-      await expect(diagnostic.getByText(label, { exact: true })).toHaveCount(5);
+      await expect(diagnostic.getByText(label, { exact: true })).toHaveCount(configs.length);
     }
     const persisted: TestCase = await (
       await request.get(`${backend}/api/test-cases/${result.test_case_id}`)
     ).json();
     expect(persisted.status).toBe("confirmed");
-    expect(persisted.runs).toHaveLength(5);
+    expect(persisted.runs).toHaveLength(configs.length);
     await page
       .getByRole("tab", { name: "เปรียบเทียบทั้งหมด", exact: true })
       .click();
@@ -209,8 +203,8 @@ for (const imageFile of [
       expect(run.metrics?.wer).toBeGreaterThanOrEqual(0);
       expect(typeof run.metrics?.exact_match).toBe("boolean");
       expect(run.confidence).not.toBeNull();
-      expect(run.gateway_request_id).toBe(["benchmark", "thai_ft_v2"].includes(run.pipeline_id) ? "fixture-det" : "fixture-request");
-      expect(run.gateway_duration_ms).toBe(["benchmark", "thai_ft_v2"].includes(run.pipeline_id) ? 120 : 123.4);
+      expect(run.gateway_request_id).toBe(["benchmark", "thai_ft_v2"].includes(run.pipeline_id) ? "fixture-det" : run.pipeline_id === "hutch_fine_tune_v2" ? "fixture-rec" : "fixture-request");
+      expect(run.gateway_duration_ms).toBe(["benchmark", "thai_ft_v2"].includes(run.pipeline_id) ? 120 : run.pipeline_id === "hutch_fine_tune_v2" ? 20 : 123.4);
       const card = page
         .locator("article")
         .filter({ has: page.getByTestId(`result-text-${run.pipeline_id}`) });
@@ -287,9 +281,7 @@ for (const imageFile of [
       ).toHaveCount(0);
     }
     await page.goto("/matrix");
-    await expect(page.locator("table").last().locator("tbody tr")).toHaveCount(
-      5,
-    );
+    await expect(page.locator("table").last().locator("tbody tr")).toHaveCount(configs.length);
     await page.screenshot({
       path: "test-results/matrix-desktop.png",
       fullPage: true,
@@ -435,7 +427,7 @@ test("legacy compatibility: ROI move and resize, selectable Auto ROI, and failur
     .getByRole("button", { name: t("Run selected"), exact: true })
     .click();
   const result = await (await pending).json();
-  expect(result.runs).toHaveLength(5);
+  expect(result.runs).toHaveLength(6);
   for (const run of result.runs.filter((r: PipelineRun) => r.pipeline_id !== "hutch_full")) {
     expect(run.roi).toEqual({ x1: finalROI[0], y1: finalROI[1], x2: finalROI[2], y2: finalROI[3] });
     expect(run.input_width).toBe(finalROI[2] - finalROI[0]);

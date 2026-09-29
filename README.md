@@ -39,7 +39,7 @@ Upload and layout preparation never run OCR. A layout becomes immutable once OCR
 
 ## OCR Pipelines
 
-Five adapters are registered. Selection/dashboard rows follow configuration. Disabled pipelines are not silently enabled.
+Six adapters are registered. Selection/dashboard rows follow configuration. Disabled pipelines are not silently enabled.
 
 ### Mint
 
@@ -77,11 +77,17 @@ POST /api/v1/text-recognition-batches?version=6&model=thai_ft_v2
 
 No V5 fallback. Selection metadata is `version=v6`, `variant=thai_ft_v2`. Some responses retain `results[*].model=th_PP-OCRv5_mobile_rec`; the model owner confirmed stale upstream metadata. Preserve it as received; never use it for routing. See [Thai FT v2](docs/thai-ft-v2.md).
 
+### Hutch fine tune v2
+
+Recognition only: canonical Global Field PNG → `POST /api/v1/text-recognition-batches?version=5&model=thai_ft_v2`.
+Each request sends one crop through the existing multipart `images` batch field. There is no DET stage or extra crop. This differs from Thai FT v2, which retains DET V6 + REC V6 with `model=thai_ft_v2`.
+The common Global Field UUID, crop hash, shared GT, evaluation and History flow apply unchanged. Raw upstream model metadata remains diagnostic only. Unknown readiness permits a real request; actual errors remain isolated per pipeline. Uses existing Gateway credentials and seed configuration, with no new migration or environment variable.
+
 ## Auto ROI & Manual ROI
 
 Auto Layout calls `/api/v1/document-layouts` and immediately displays all returned usable boxes as editable drafts. Users can add, move, resize or delete Auto/Manual boxes without losing the others. The main preview contains only Global Layout boxes. Suggestions are page/session-local; saved selected fields survive reload.
 
-Coordinates refer to original image/selected PDF raster pixels. Zoom/pan affects only rendering. Backend ordering groups boxes with at least 50% vertical overlap relative to the shorter height against a fixed row anchor, then sorts rows top-to-bottom and boxes left-to-right. UUIDs are stable; `field_index` is recomputed before OCR, then locked. All five adapters receive identical canonical PNG bytes/hash/dimensions per Global Field.
+Coordinates refer to original image/selected PDF raster pixels. Zoom/pan affects only rendering. Backend ordering groups boxes with at least 50% vertical overlap relative to the shorter height against a fixed row anchor, then sorts rows top-to-bottom and boxes left-to-right. UUIDs are stable; `field_index` is recomputed before OCR, then locked. All six adapters receive identical canonical PNG bytes/hash/dimensions per Global Field.
 
 ## Ground Truth
 
@@ -164,7 +170,7 @@ Copy [.env.example](.env.example) to private root `.env` only if absent. Backend
 | Public frontend | `NEXT_PUBLIC_API_BASE_URL`: browser-accessible API URL embedded at build |
 | Tests only | `TEST_DATABASE_URL`: disposable local PostgreSQL database ending in `_test` |
 
-All five share Gateway URL/key; no per-pipeline credentials/new Thai FT v2 variables. Prefer ordinary token keys unquoted without spaces around `=`; quotes are optional. Keep example key empty. Absent credentials cause a clear failure, never silent mock OCR.
+All six share Gateway URL/key; no per-pipeline credentials/new Thai FT v2 variables. Prefer ordinary token keys unquoted without spaces around `=`; quotes are optional. Keep example key empty. Absent credentials cause a clear failure, never silent mock OCR.
 
 ## Local Development
 

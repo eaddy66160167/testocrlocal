@@ -52,7 +52,7 @@ test("legacy compatibility: default field GT uses Check preview, accessible red 
     }
   }
   const before = await (await request.get(`${api}/api/test-cases/${result.test_case_id}`)).json();
-  expect(before.runs[0].fields[1].ground_truth_raw).toBeNull();
+  expect(before.runs.find((r: {pipeline_id: string}) => r.pipeline_id === "mint").fields[1].ground_truth_raw).toBeNull();
   await field.getByRole("button", { name: "ยืนยัน GT Field", exact: true }).click();
   await expect(field).toContainText("ยืนยันแล้ว");
   await expect(page.getByTestId("field-summary")).toContainText("ยืนยัน 1/2 Fields");

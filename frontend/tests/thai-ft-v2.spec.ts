@@ -8,7 +8,7 @@ const backend = process.env.E2E_API_URL || "http://127.0.0.1:8000";
 
 test("legacy compatibility: Thai FT v2 fifth pipeline supports Auto/Manual ROI, field GT, persistence and dashboards", async ({ page, request }) => {
   const configs: PipelineConfig[] = await (await request.get(`${backend}/api/pipelines`)).json();
-  expect(new Set(configs.map(p => p.pipeline_id))).toEqual(new Set(["mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2"]));
+  expect(new Set(configs.map(p => p.pipeline_id))).toEqual(new Set(["mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2", "hutch_fine_tune_v2"]));
   await page.goto("/settings/pipelines");
   const card = page.locator("section").filter({ has: page.getByRole("heading", { name: "Thai FT v2", exact: true }) });
   await expect(card).toContainText("Recognition V6 + thai_ft_v2");

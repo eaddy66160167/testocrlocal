@@ -16,6 +16,17 @@ class PipelineConfigService:
             raise AppError("Register an adapter with a verified API contract before configuring this pipeline", 422)
         expected_engine = adapter.engine
         values = data.model_dump(exclude_unset=True)
+        if pipeline_id == "hutch_fine_tune_v2":
+            fixed = dict(endpoint="/api/v1/text-recognition-batches", engine=expected_engine,
+                         query_params={"version": "5", "model": "thai_ft_v2"},
+                         request_format="multipart", file_field_name="images")
+            if any(key in values and values[key] != value for key, value in fixed.items()):
+                raise AppError("Hutch fine tune v2 uses REC V5 with model=thai_ft_v2 only", 422)
+            for key, value in {**values, **fixed}.items():
+                setattr(config, key, value)
+            config.include_roi = False
+            config.last_connection_status = None
+            return self.repository.save(config)
         if pipeline_id in {"benchmark", "thai_ft_v2"}:
             query = {"version": "6"}
             if pipeline_id == "thai_ft_v2":

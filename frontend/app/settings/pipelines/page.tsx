@@ -32,6 +32,7 @@ function editable(config: PipelineConfig) {
 }
 
 const DESCRIPTIONS: Record<string, string> = {
+  hutch_fine_tune_v2: "Global Field crop → Recognition V5 + thai_ft_v2 (REC only, no DET)",
   thai_ft_v2: "ROI → Detection V6 + thai_ft_v2 → ภาพบรรทัด → Recognition V6 + thai_ft_v2",
   benchmark: "ใช้ ROI ที่ยืนยันแล้ว → Detection V6 → ภาพบรรทัด → Recognition V5 baseline (ไม่ส่ง model)",
   mint: t(
@@ -193,7 +194,7 @@ function PipelineCard({ pipeline }: { pipeline: PipelineConfig }) {
                 {t("Request format")}
                 <select
                   className="select"
-                  disabled={["benchmark", "thai_ft_v2"].includes(saved.pipeline_id)}
+                  disabled={["benchmark", "thai_ft_v2", "hutch_fine_tune_v2"].includes(saved.pipeline_id)}
                   value={form.request_format}
                   onChange={(event) =>
                     change(
@@ -231,7 +232,7 @@ function PipelineCard({ pipeline }: { pipeline: PipelineConfig }) {
                   placeholder="/api/v1/ocr-results"
                   autoComplete="off"
                   value={form.endpoint}
-                  readOnly={["benchmark", "thai_ft_v2"].includes(saved.pipeline_id)}
+                  readOnly={["benchmark", "thai_ft_v2", "hutch_fine_tune_v2"].includes(saved.pipeline_id)}
                   onChange={(event) => change("endpoint", event.target.value)}
                 />
               </label>
