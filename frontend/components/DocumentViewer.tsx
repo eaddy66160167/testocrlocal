@@ -22,9 +22,13 @@ import BoundingBoxLayer from "./BoundingBoxLayer";
 import TestRegionLayer from "./TestRegionLayer";
 
 export interface DocumentViewerProps {
+  reviewMode?: boolean;
+  globalFieldColor?: string;
   compactReference?: boolean;
   globalFields?: {id: string; field_index: number; roi: ROI}[];
   selectedGlobalFieldId?: string | null;
+  selectedGlobalFieldIds?: string[];
+  showRoiDelete?: boolean;
   onSelectGlobalField?: (id: string) => void;
   imageUrl: string;
   width: number;
@@ -35,6 +39,7 @@ export interface DocumentViewerProps {
   activeSuggestionId?: string | null;
   roiSource?: "auto" | "manual" | "none";
   boxes: ViewerBox[];
+  highlightedBoxIds?: string[];
   selectedBoxId: string | null;
   onSelectBox: (id: string | null) => void;
   regionMode: boolean;
@@ -52,6 +57,8 @@ const MIN_ZOOM = 0.005;
 const MAX_ZOOM = 8;
 
 export default function DocumentViewer({
+  reviewMode = false,
+  globalFieldColor,
   compactReference = false,
   imageUrl,
   width,
@@ -63,6 +70,7 @@ export default function DocumentViewer({
   roiSource,
   boxes,
   selectedBoxId,
+  highlightedBoxIds = [],
   onSelectBox,
   regionMode,
   onRegionModeChange,
@@ -71,6 +79,8 @@ export default function DocumentViewer({
   onSelectSuggestion,
   globalFields,
   selectedGlobalFieldId,
+  selectedGlobalFieldIds = [],
+  showRoiDelete = true,
   onSelectGlobalField,
 }: DocumentViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +101,7 @@ export default function DocumentViewer({
   const [retryKey, setRetryKey] = useState(0);
   const [panMode, setPanMode] = useState(false);
   const [showBoxes, setShowBoxes] = useState(true);
+  const [showAllFields, setShowAllFields] = useState(true);
   const [draftRoi, setDraftRoi] = useState<ROI | null>(null);
   const [pointerCoordinates, setPointerCoordinates] = useState<Point | null>(
     null,
@@ -205,6 +216,12 @@ export default function DocumentViewer({
     [constrainView, viewport, setView],
   );
 
+  const focusRegion = useCallback(() => {
+    if (!roi) return;
+    const scale = clamp(Math.min((viewport.width-96)/(roi.x2-roi.x1), (viewport.height-96)/(roi.y2-roi.y1)), MIN_ZOOM, MAX_ZOOM);
+    setView({scale, x:viewport.width/2-(roi.x1+roi.x2)*scale/2, y:viewport.height/2-(roi.y1+roi.y2)*scale/2});
+  }, [roi, viewport, setView]);
+
   const getOriginalPoint = (): Point | null => {
     const position = stageRef.current?.getPointerPosition();
     if (!position) return null;
@@ -288,7 +305,7 @@ export default function DocumentViewer({
       finalRoi.y2 > finalRoi.y1
     ) {
       (onManualRoi ?? onRoiChange)(finalRoi);
-      onRegionModeChange(false);
+      if (!onManualRoi) onRegionModeChange(false);
       setPanMode(false);
     }
     drawStartRef.current = null;
@@ -305,17 +322,23 @@ export default function DocumentViewer({
     <div
       className={`flex ${compactReference ? "min-h-[380px]" : "min-h-[520px]"} flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white`}
       data-testid="document-viewer"
+      data-highlighted-det-count={highlightedBoxIds.length}
+      data-show-all-fields={showAllFields}
+      data-active-field={selectedGlobalFieldId??""}
+      data-view-x={view.x}
+      data-view-y={view.y}
+      data-view-scale={view.scale}
     >
       <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2">
         <div
-          className="flex items-center gap-1"
+          className="flex flex-wrap items-center gap-1"
           role="toolbar"
           aria-label={t("Document tools")}
         >
           <button
             type="button"
-            aria-label={t("Select and edit region")}
-            title={t("Select and edit region")}
+            aria-label={reviewMode ? "เลือกกรอบ Field" : t("Select and edit region")}
+            title={reviewMode ? "เลือกกรอบ Field" : t("Select and edit region")}
             aria-pressed={!panMode && !regionMode}
             className={toolClass(!panMode && !regionMode)}
             onClick={() => {
@@ -338,7 +361,7 @@ export default function DocumentViewer({
           >
             <Hand size={16} />
           </button>
-          <button
+          {allowRoi && <button
             type="button"
             disabled={!allowRoi}
             aria-label={t("Draw test region")}
@@ -351,19 +374,21 @@ export default function DocumentViewer({
             }}
           >
             <Crop size={16} />
-          </button>
+          </button>}
           <span className="mx-1 h-5 w-px bg-slate-200" />
-          <button
+          {reviewMode && !!globalFields?.length && <button type="button" aria-label="แสดงกรอบ Global ทั้งหมด" aria-pressed={showAllFields} title="ซ่อนกรอบ Global อื่น โดยยังแสดง Field ที่เลือก" className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs text-slate-700 hover:bg-slate-100" onClick={()=>setShowAllFields(v=>!v)}><ScanLine size={16}/>{showAllFields?"ซ่อนกรอบ Global อื่น":"แสดงกรอบ Global ทั้งหมด"}</button>}
+          {!!boxes.length && <button
             type="button"
-            aria-label={showBoxes ? t("Hide OCR boxes") : t("Show OCR boxes")}
-            title={showBoxes ? t("Hide OCR boxes") : t("Show OCR boxes")}
+            aria-label={reviewMode ? "แสดงกรอบ DET ทั้งหมด" : showBoxes ? t("Hide OCR boxes") : t("Show OCR boxes")}
+            title={reviewMode ? "ซ่อนกรอบ DET อื่น โดยยังแสดงกรอบที่เลือก" : showBoxes ? t("Hide OCR boxes") : t("Show OCR boxes")}
             aria-pressed={showBoxes}
-            className={toolClass(showBoxes)}
+            className={reviewMode ? "flex items-center gap-2 rounded-lg px-2 py-1 text-xs text-slate-700 hover:bg-slate-100" : toolClass(showBoxes)}
             onClick={() => setShowBoxes(!showBoxes)}
           >
             <ScanLine size={16} />
-          </button>
-          <button
+            {reviewMode && (showBoxes ? "ซ่อนกรอบ DET อื่น" : "แสดงกรอบ DET ทั้งหมด")}
+          </button>}
+          {showRoiDelete && <button
             type="button"
             aria-label={t("Clear test region")}
             title={t("Clear test region")}
@@ -375,10 +400,10 @@ export default function DocumentViewer({
             }}
           >
             <Trash2 size={15} />
-          </button>
+          </button>}
         </div>
         <div
-          className="flex items-center gap-1"
+          className="flex flex-wrap items-center gap-1"
           role="toolbar"
           aria-label={t("Zoom controls")}
         >
@@ -421,7 +446,8 @@ export default function DocumentViewer({
           >
             <Maximize size={15} />
           </button>
-          <button
+          {reviewMode && !!roi && <button type="button" aria-label="ซูมกรอบที่เลือก" title="ซูมกรอบที่เลือก" disabled={!roi||!image} className={toolClass()} onClick={focusRegion}><ScanLine size={16}/></button>}
+          {!reviewMode && <button
             type="button"
             aria-label={t("Reset document view")}
             title={t("Reset document view")}
@@ -433,7 +459,7 @@ export default function DocumentViewer({
             }}
           >
             <RotateCcw size={15} />
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -441,7 +467,7 @@ export default function DocumentViewer({
         ref={containerRef}
         className={`relative ${compactReference ? "min-h-[320px] flex-none" : "min-h-[420px] flex-1"} overflow-hidden bg-slate-100`}
         style={{
-          height: compactReference ? "clamp(320px, 40vh, 520px)" : "clamp(420px, 62vh, 760px)",
+          height: reviewMode ? "clamp(460px, 75vh, 960px)" : compactReference ? "clamp(320px, 40vh, 520px)" : "clamp(420px, 62vh, 760px)",
           backgroundImage: "radial-gradient(#cbd5e1 0.7px, transparent 0.7px)",
           backgroundSize: "16px 16px",
           cursor: regionMode ? "crosshair" : panMode ? "grab" : "default",
@@ -468,6 +494,9 @@ export default function DocumentViewer({
           } else if (event.key === "0") {
             event.preventDefault();
             fitView();
+          } else if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)) {
+            event.preventDefault();
+            setView(current=>constrainView({...current,x:current.x+(event.key==="ArrowLeft"?40:event.key==="ArrowRight"?-40:0),y:current.y+(event.key==="ArrowUp"?40:event.key==="ArrowDown"?-40:0)}));
           }
         }}
       >
@@ -569,9 +598,14 @@ export default function DocumentViewer({
                   width={width}
                   height={height}
                 />
-                {globalFields?.filter(f => f.id !== selectedGlobalFieldId).map(field => (
+                {globalFields?.filter(f => reviewMode || f.id !== selectedGlobalFieldId).map(field => reviewMode ? (
+                  <Group key={field.id} name="global-layout-field" onClick={()=>onSelectGlobalField?.(field.id)} onTap={()=>onSelectGlobalField?.(field.id)} listening={!panMode}>
+                    <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke={field.id===selectedGlobalFieldId?(globalFieldColor??"#7c3aed"):showAllFields?(globalFieldColor??"#2563eb"):undefined} strokeWidth={(field.id===selectedGlobalFieldId?3:2)/view.scale} fill={field.id===selectedGlobalFieldId?(globalFieldColor?"rgba(250,204,21,0.22)":"rgba(124,58,237,0.14)"):"rgba(0,0,0,0)"}/>
+                    {(showAllFields||field.id===selectedGlobalFieldId)&&<Text listening={false} x={field.roi.x1} y={Math.max(0,field.roi.y1-20/view.scale)} text={`Field ${String(field.field_index).padStart(2,"0")}${field.id===selectedGlobalFieldId?" •":""}`} fontSize={14/view.scale} fill={globalFieldColor??(field.id===selectedGlobalFieldId?"#7c3aed":"#2563eb")}/>}
+                  </Group>
+                ) : (
                   <Group key={field.id} name="global-layout-field" onClick={() => onSelectGlobalField?.(field.id)} onTap={() => onSelectGlobalField?.(field.id)} listening={!regionMode && !panMode}>
-                    <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke="#2563eb" strokeWidth={2/view.scale} fill="rgba(37,99,235,0.04)" />
+                    <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke={selectedGlobalFieldIds.includes(field.id) ? "#7c3aed" : "#2563eb"} strokeWidth={(selectedGlobalFieldIds.includes(field.id) ? 3 : 2)/view.scale} fill={selectedGlobalFieldIds.includes(field.id) ? "rgba(124,58,237,0.18)" : "rgba(37,99,235,0.04)"} />
                     <Text x={field.roi.x1} y={Math.max(0,field.roi.y1-18/view.scale)} text={`Field ${String(field.field_index).padStart(2,"0")}`} fontSize={13/view.scale} fill="#1d4ed8" />
                   </Group>
                 ))}
@@ -584,7 +618,7 @@ export default function DocumentViewer({
                     interactive={!regionMode && !panMode}
                   />
                 )}
-                {currentRoi && (
+                {currentRoi && !reviewMode && (
                   <TestRegionLayer
                     roi={currentRoi}
                     imageWidth={width}
@@ -596,6 +630,7 @@ export default function DocumentViewer({
                     drawing={Boolean(draftRoi)}
                     label={globalFields ? (draftRoi ? "New Field" : `Field ${String(globalFields.find(f=>f.id===selectedGlobalFieldId)?.field_index ?? "").padStart(2,"0")}`) : draftRoi || roiSource === "manual" ? "Manual ROI" : roiSource === "auto" ? "Auto ROI" : undefined}
                     onClick={() => {
+                      if (selectedGlobalFieldId) onSelectGlobalField?.(selectedGlobalFieldId);
                       // A click can select an overlapping suggestion; dragging still edits the active ROI.
                       const point = getOriginalPoint();
                       const candidate = point && suggestions.find(s => s.id !== activeSuggestionId && point.x >= s.roi.x1 && point.x <= s.roi.x2 && point.y >= s.roi.y1 && point.y <= s.roi.y2);
@@ -604,9 +639,10 @@ export default function DocumentViewer({
                     onChange={onRoiChange}
                   />
                 )}
-                {showBoxes && (
+                {!!boxes.length && (
                   <BoundingBoxLayer
-                    boxes={boxes}
+                    boxes={showBoxes ? boxes : boxes.filter(box=>box.id===selectedBoxId||highlightedBoxIds.includes(box.id))}
+                    highlightedBoxIds={highlightedBoxIds}
                     selectedBoxId={selectedBoxId}
                     onSelectBox={onSelectBox}
                     scale={view.scale}
@@ -640,6 +676,7 @@ export default function DocumentViewer({
       </div>
 
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-3 py-2 text-[10px] text-slate-400">
+        {reviewMode&&<span className="w-full text-xs text-slate-500">{globalFields?.find(f=>f.id===selectedGlobalFieldId)?`Field ${String(globalFields.find(f=>f.id===selectedGlobalFieldId)!.field_index).padStart(2,"0")} · `:""}ลากด้วยเครื่องมือมือเพื่อเลื่อน · Ctrl + ล้อเมาส์เพื่อซูม · ปุ่มลูกศรเลื่อนภาพ · 0 พอดีหน้าจอ</span>}
         <span className="font-mono">
           {width.toLocaleString()} × {height.toLocaleString()} px
           {pointerCoordinates && (

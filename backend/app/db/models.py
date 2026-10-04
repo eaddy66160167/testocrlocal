@@ -255,6 +255,18 @@ class AppLog(Base):
     details: Mapped[dict] = mapped_column("metadata", JSON_TYPE, default=dict)
 
 
+class OCRModel(Base):
+    __tablename__ = "ocr_models"
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(10))
+    source: Mapped[str] = mapped_column(String(20))
+    version: Mapped[str] = mapped_column(String(50))
+    weight: Mapped[str] = mapped_column(String(100))
+    single_path: Mapped[str] = mapped_column(String(500), default="")
+    batch_path: Mapped[str] = mapped_column(String(500))
+
+
 class PipelineConfig(Base):
     __tablename__ = "pipeline_configs"
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=new_id)
@@ -270,5 +282,12 @@ class PipelineConfig(Base):
     engine: Mapped[str | None] = mapped_column(String(100), nullable=True)
     include_roi: Mapped[bool] = mapped_column(Boolean, default=False)
     last_connection_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    execution_mode: Mapped[str | None] = mapped_column("dynamic_mode", String(20), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    integrated_options: Mapped[dict | None] = mapped_column(JSON_TYPE, nullable=True)
+    det_model_id: Mapped[str | None] = mapped_column(ForeignKey("ocr_models.id"), nullable=True)
+    rec_model_id: Mapped[str | None] = mapped_column(ForeignKey("ocr_models.id"), nullable=True)
+    det_model: Mapped[OCRModel | None] = relationship(foreign_keys=[det_model_id], lazy="selectin")
+    rec_model: Mapped[OCRModel | None] = relationship(foreign_keys=[rec_model_id], lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)

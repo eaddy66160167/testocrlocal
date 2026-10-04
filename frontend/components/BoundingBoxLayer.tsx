@@ -6,6 +6,7 @@ import type { ViewerBox } from "@/types";
 
 interface BoundingBoxLayerProps {
   boxes: ViewerBox[];
+  highlightedBoxIds?: string[];
   selectedBoxId: string | null;
   onSelectBox: (id: string | null) => void;
   scale: number;
@@ -16,6 +17,7 @@ interface BoundingBoxLayerProps {
 export default function BoundingBoxLayer({
   boxes,
   selectedBoxId,
+  highlightedBoxIds = [],
   onSelectBox,
   scale,
   interactive = true,
@@ -28,7 +30,7 @@ export default function BoundingBoxLayer({
       {ordered.map((box) => {
         const [x1, y1, x2, y2] = box.bbox;
         if (![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) return null;
-        const selected = box.id === selectedBoxId;
+        const selected = box.id === selectedBoxId || highlightedBoxIds.includes(box.id);
         return (
           <Group key={box.id}>
             {selected && (
@@ -80,7 +82,7 @@ export default function BoundingBoxLayer({
               }}
             />
             {box.polygon && box.polygon.length >= 3 && <Line name="ocr-box" points={box.polygon.flat()} closed stroke={box.color} strokeWidth={selected ? 3 : 1.5} strokeScaleEnabled={false} fill="rgba(99,102,241,0.04)" onClick={event => { event.cancelBubble = true; onSelectBox(box.id); }} onTap={event => { event.cancelBubble = true; onSelectBox(box.id); }} />}
-            {selected && (
+            {box.id === selectedBoxId && (
               <Text
                 x={x1}
                 y={Math.max(0, y1 - 21 / scale)}

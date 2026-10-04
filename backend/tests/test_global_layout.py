@@ -16,6 +16,24 @@ from tests.test_benchmark_pipeline import parts
 PIPELINES = ["mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2"]
 
 
+def test_synchronized_gt_requires_all_fields_and_matching_document(client, document):
+    case, fields = layout(client, document)
+    run(client, case)
+    root = f"/api/test-cases/{case['id']}"
+    payload = {"mode": "auto", "global_field_ids": [f["id"] for f in fields], "require_complete_gt": True}
+    assert client.post(root + "/evaluate", json=payload).status_code == 422
+    client.put(root + f"/global-fields/{fields[0]['id']}/ground-truth", json={"ground_truth_raw": "A\nB"})
+    client.put(root + "/ground-truth", json={"ground_truth_raw": "A\nB"})
+    assert client.post(root + "/evaluate", json=payload).status_code == 422
+    client.put(root + f"/global-fields/{fields[1]['id']}/ground-truth", json={"ground_truth_raw": "C"})
+    assert client.post(root + "/evaluate", json=payload).status_code == 422
+    client.put(root + "/ground-truth", json={"ground_truth_raw": "A\nB\nC"})
+    assert client.post(root + "/evaluate", json={**payload, "global_field_ids": [fields[0]['id']]}).status_code == 422
+    result = client.post(root + "/evaluate", json=payload)
+    assert result.status_code == 200, result.text
+    assert all(r["document_evaluation"] and all(f["evaluation"] for f in r["fields"]) for r in result.json()["runs"])
+
+
 @pytest.mark.parametrize("whole,sub", [(True, False), (False, True), (True, True), (False, False)])
 def test_smart_calculation_data_presence_and_persistence(client, document, whole, sub):
     case, fields = layout(client, document)

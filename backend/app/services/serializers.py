@@ -162,6 +162,7 @@ def test_case_json(record):
 
 
 def config_json(record, settings=None):
+    from app.services.dynamic_pipeline_service import model_json
     keys = (
         "id",
         "pipeline_id",
@@ -179,6 +180,13 @@ def config_json(record, settings=None):
     )
     return {
         **{key: getattr(record, key) for key in keys},
+        "execution_mode": record.execution_mode,
+        "integrated_options": record.integrated_options,
+        "source": record.source,
+        "det_model_id": record.det_model_id,
+        "rec_model_id": record.rec_model_id,
+        "det_model": model_json(record.det_model),
+        "rec_model": model_json(record.rec_model),
         "base_url": settings.model_gateway_base_url if settings else record.base_url,
         "api_key_configured": bool(settings.api_key(record.pipeline_id)) if settings else False,
         "created_at": timestamp(record.created_at),

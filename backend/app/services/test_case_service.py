@@ -182,7 +182,7 @@ class TestCaseService:
         try:
             crop = (
                 self.images.canonical_crop(original, record.roi)
-                if any(PipelineManager.requires_crop(config.pipeline_id) for config in configs)
+                if any(PipelineManager.requires_crop(config) for config in configs)
                 else None
             )
             runs = await PipelineManager(self.settings).run(configs, original, crop, record.roi, record.roi_source)

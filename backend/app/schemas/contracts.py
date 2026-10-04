@@ -81,6 +81,7 @@ class EvaluationMode(InputModel):
 class GlobalEvaluation(EvaluationMode):
     mode: Literal["whole_document", "per_field", "auto"] = "auto"
     global_field_ids: list[UUID] = Field(default_factory=list, max_length=50)
+    require_complete_gt: bool = False
 
     @model_validator(mode="after")
     def valid_selection(self):

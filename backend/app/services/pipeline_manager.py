@@ -3,37 +3,28 @@ from uuid import uuid4
 
 from app.db.models import PipelineRun
 from app.integrations.model_gateway import GatewayError
-from app.pipelines.benchmark import BenchmarkPipelineAdapter
-from app.pipelines.hutch_crop import HutchCropPipelineAdapter
-from app.pipelines.hutch_fine_tune_v2 import HutchFineTuneV2PipelineAdapter
-from app.pipelines.hutch_full import HutchFullPipelineAdapter
-from app.pipelines.mint import MintPipelineAdapter
-from app.pipelines.thai_ft_v2 import ThaiFTV2PipelineAdapter
+from app.pipelines.dynamic import DynamicDetectionRecognitionAdapter, DynamicRecognitionAdapter, DynamicCustomAdapter, DynamicOfficialAdapter
 from app.services.metrics_service import normalize_text
 
 
 class PipelineManager:
-    adapter_classes = {
-        "mint": MintPipelineAdapter,
-        "hutch_crop": HutchCropPipelineAdapter,
-        "hutch_full": HutchFullPipelineAdapter,
-        "benchmark": BenchmarkPipelineAdapter,
-        "thai_ft_v2": ThaiFTV2PipelineAdapter,
-        "hutch_fine_tune_v2": HutchFineTuneV2PipelineAdapter,
-    }
-
     def __init__(self, settings):
         self.settings = settings
 
     @classmethod
     def requires_crop(cls, pipeline_id):
-        adapter = cls.adapter_classes.get(pipeline_id)
-        return adapter is not None and adapter.requires_crop
+        return not isinstance(pipeline_id, str) and bool(pipeline_id.execution_mode)
 
     async def run(self, configs, original_image, cropped_image, roi, roi_source="none"):
         async def run_one(config):
             request_id = f"ocr_{uuid4().hex}"
-            adapter_class = self.adapter_classes.get(config.pipeline_id)
+            adapter_class = None
+            if config.execution_mode:
+                adapter_class = {
+                    "det_rec": DynamicDetectionRecognitionAdapter,
+                    "rec": DynamicRecognitionAdapter,
+                    "integrated": DynamicCustomAdapter if config.source == "custom" else DynamicOfficialAdapter,
+                }[config.execution_mode]
             if adapter_class is None:
                 return PipelineRun(pipeline_id=config.pipeline_id, pipeline_name=config.name,
                                    status="error", error_code="ADAPTER_NOT_CONFIGURED",

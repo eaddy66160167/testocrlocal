@@ -61,6 +61,18 @@ class PipelineConfigService:
 
     async def test_connection(self, pipeline_id):
         config = self.repository.config(pipeline_id)
+        if config.execution_mode:
+            if not self.settings.api_key(pipeline_id):
+                config.last_connection_status = "missing_key"
+                self.repository.save(config)
+                return {"status": "missing_key", "message": "Configure MODEL_GATEWAY_API_KEY first"}
+            result = await ModelGatewayClient(self.settings).status()
+            status = "gateway_connected" if result["gateway"] == "connected" else "unavailable"
+            if "not_authenticated" in result.values():
+                status = "not_authenticated"
+            config.last_connection_status = status
+            self.repository.save(config)
+            return {"status": status, "message": "เชื่อมต่อ Gateway สำเร็จ — ทดสอบ OCR เพื่อยืนยันโมเดลที่เลือก" if status == "gateway_connected" else "เชื่อมต่อ Gateway ไม่สำเร็จ กรุณาตรวจการเชื่อมต่อและ API Key"}
         if pipeline_id not in PipelineManager.adapter_classes:
             return {"status": "not_configured", "message": "No adapter is registered for this pipeline"}
         if not self.settings.api_key(pipeline_id):

@@ -36,14 +36,14 @@ class BenchmarkRepository:
         return results
 
     def configs(self) -> list[PipelineConfig]:
-        return sorted(
-            self.session.scalars(select(PipelineConfig)),
-            key=lambda row: ({"mint": 0, "hutch_crop": 1, "hutch_full": 2}.get(row.pipeline_id, 3), row.pipeline_id),
-        )
+        return list(self.session.scalars(
+            select(PipelineConfig).where(PipelineConfig.execution_mode.is_not(None))
+            .order_by(PipelineConfig.created_at, PipelineConfig.pipeline_id)
+        ))
 
     def config(self, pipeline_id: str) -> PipelineConfig:
         record = self.session.scalar(
-            select(PipelineConfig).where(PipelineConfig.pipeline_id == pipeline_id)
+            select(PipelineConfig).where(PipelineConfig.pipeline_id == pipeline_id, PipelineConfig.execution_mode.is_not(None))
         )
         if record is None:
             raise AppError("Pipeline not found", 404)

@@ -22,6 +22,9 @@ def invalid(message):
 
 
 class BenchmarkPipelineAdapter(CropInputAdapter):
+    detection_endpoint = DETECTION_ENDPOINT
+    recognition_endpoint = RECOGNITION_ENDPOINT
+    detection_version = 6
     engine = "det_v6_rec_v5"  # Internal display/config identifier; never sent as a query.
     detector = "PP-OCRv6_medium_det"
     recognition_batch_size = 8
@@ -74,8 +77,8 @@ class BenchmarkPipelineAdapter(CropInputAdapter):
         detection = await self.gateway.send(
             self.batch_request(
                 pngs=[crop.png],
-                endpoint=DETECTION_ENDPOINT,
-                version=6,
+                endpoint=self.detection_endpoint,
+                version=self.detection_version,
                 request_id=request_id + "_det",
             )
         )
@@ -114,7 +117,7 @@ class BenchmarkPipelineAdapter(CropInputAdapter):
                 recognition = await self.gateway.send(
                     self.batch_request(
                         pngs=pngs,
-                        endpoint=RECOGNITION_ENDPOINT,
+                        endpoint=self.recognition_endpoint,
                         version=self.recognition_version,
                         request_id=f"{request_id}_rec_{len(recognition_batches)}",
                     )
@@ -145,7 +148,7 @@ class BenchmarkPipelineAdapter(CropInputAdapter):
             "composition": {
                 "ordering": "detection_order",
                 "line_count": len(lines),
-                "recognition_endpoint": RECOGNITION_ENDPOINT,
+                "recognition_endpoint": self.recognition_endpoint,
                 "recognition_version": str(self.recognition_version),
             },
         }

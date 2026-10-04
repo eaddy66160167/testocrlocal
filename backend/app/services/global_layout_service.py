@@ -140,6 +140,16 @@ class GlobalLayoutService:
 
     def evaluate(self, case_id, data, *, persist=True):
         case = self.case(case_id)
+        if data.require_complete_gt:
+            fields = sorted(case.global_fields, key=lambda f: f.field_index)
+            if not fields or any(not (f.ground_truth_raw or "").strip() for f in fields):
+                raise AppError("กรุณากรอก Ground Truth ให้ครบทุก Field ก่อนคำนวณ", 422)
+            joined = "\n".join(f.ground_truth_raw for f in fields)
+            document = (case.ground_truth_raw or "").replace("\r\n", "\n").replace("\r", "\n")
+            if joined.replace("\r\n", "\n").replace("\r", "\n") != document:
+                raise AppError("กรุณาซิงก์ Whole Field และ Sub-fields ให้ตรงกันก่อนคำนวณ", 422)
+            if data.mode != "auto" or {str(fid) for fid in data.global_field_ids} != {f.id for f in fields}:
+                raise AppError("กรุณาคำนวณทั้ง Whole Field และ Sub-fields ให้ครบทุก Field", 422)
         if data.mode == "auto":
             # Data presence determines scopes; the visible editor never controls evaluation.
             selected = [self.field(case, str(fid)) for fid in data.global_field_ids]

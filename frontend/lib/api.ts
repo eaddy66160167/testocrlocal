@@ -7,6 +7,8 @@ export function assetUrl(path: string): string {
   return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
 }
 
+export const deletePipeline = (id: string) => request<void>(`/pipelines/${encodeURIComponent(id)}`, {method:"DELETE"});
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -42,6 +44,9 @@ export const getGatewayStatus = () => request<import("@/types").GatewayStatus>("
 export const getAutoROIs = (id: string, auto_roi_mode = "text-line", page_number: number | null = null) => request<import("@/types").AutoROIResponse>(`/documents/${id}/auto-rois`, { method: "POST", body: JSON.stringify({ auto_roi_mode, expand_text_rois: false, page_number }) });
 export const getCategories = () => request<Category[]>("/categories");
 export const getPipelines = () => request<PipelineConfig[]>("/pipelines");
+export const getOCRModels = () => request<import("@/types").OCRModel[]>("/pipelines/models");
+export const saveOCRModel = (value: Omit<import("@/types").OCRModel, "id">, id?: string) => request<import("@/types").OCRModel>(id ? `/pipelines/models/${id}` : "/pipelines/models", { method: id ? "PUT" : "POST", body: JSON.stringify(value) });
+export const saveDynamicPipeline = (value: import("@/types").DynamicPipelineInput, id?: string) => request<PipelineConfig>(id ? `/pipelines/${id}/definition` : "/pipelines", { method: id ? "PUT" : "POST", body: JSON.stringify(value) });
 export const updatePipeline = (id: string, value: Partial<PipelineConfig>) => request<PipelineConfig>(`/pipelines/${id}`, { method: "PUT", body: JSON.stringify(value) });
 export const testConnection = (id: string) => request<{ status: string; message: string }>(`/pipelines/${id}/test-connection`, { method: "POST" });
 export const uploadDocument = (file: File, documentTypeId?: string) => { const form = new FormData(); form.set("file", file); if(documentTypeId)form.set("document_type_id",documentTypeId); return request<Document>("/documents", { method: "POST", body: form }); };
@@ -96,7 +101,7 @@ export async function loadSample(): Promise<File> {
 export const saveGlobalLayout = (id: string, fields: import("@/types").GlobalField[], confirmed: boolean) => request<TestCase>(`/test-cases/${id}/global-fields`, {method: "PUT", body: JSON.stringify({fields: fields.map(({id,field_index,roi,source})=>({id,field_index,roi,source})),confirmed})});
 export const saveGlobalGT = (caseId: string, field: import("@/types").GlobalField) => request<TestCase>(`/test-cases/${caseId}/global-fields/${field.id}/ground-truth`, {method:"PUT",body:JSON.stringify({ground_truth_raw:field.ground_truth_raw ?? ""})});
 export const setEvaluationMode = (caseId: string, mode: import("@/types").EvaluationMode) => request<TestCase>(`/test-cases/${caseId}/evaluation-mode`, {method:"PUT",body:JSON.stringify({mode})});
-export const evaluateGlobal = (caseId: string, mode: import("@/types").EvaluationMode | "auto", global_field_ids: string[] = []) => request<TestCase>(`/test-cases/${caseId}/evaluate`, {method:"POST",body:JSON.stringify({mode,global_field_ids})});
+export const evaluateGlobal = (caseId: string, mode: import("@/types").EvaluationMode | "auto", global_field_ids: string[] = [], require_complete_gt = false) => request<TestCase>(`/test-cases/${caseId}/evaluate`, {method:"POST",body:JSON.stringify({mode,global_field_ids,require_complete_gt})});
 
 export const getDocumentTypes = () => request<import("@/types").DocumentType[]>("/document-types");
 export const createDocumentType = (name: string) => request<import("@/types").DocumentType>("/document-types", {method:"POST", body:JSON.stringify({name})});

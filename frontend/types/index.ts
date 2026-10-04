@@ -39,12 +39,25 @@ export type TestCase = { history_status?: string;
   categories: Category[]; runs: PipelineRun[];
 };
 export type PipelineConfig = {
+  execution_mode?: "integrated" | "det_rec" | "rec" | null; source?: "custom" | "official" | null;
+  integrated_options?: {version: "5" | "6"; det_weight: string; rec_weight: string} | null;
+  det_model_id?: string | null; rec_model_id?: string | null;
+  det_model?: OCRModel | null; rec_model?: OCRModel | null;
   id: string; pipeline_id: string; name: string;
   base_url: string | null; endpoint: string | null; http_method: "POST" | "PUT";
   request_format: "multipart" | "json_base64" | "binary" | "custom";
   file_field_name: string | null; enabled: boolean; engine: string | null; include_roi: boolean;
   last_connection_status: string | null; created_at: string; updated_at: string;
   query_params?: Record<string, string>; api_key_configured?: boolean;
+};
+export type OCRModel = {
+  id: string; name: string; kind: "det" | "rec"; source: "custom" | "official";
+  version: string; weight: string; single_path: string; batch_path: string;
+};
+export type DynamicPipelineInput = {
+  name: string; source: "custom" | "official"; execution_mode: "integrated" | "det_rec" | "rec";
+  det_model_id: string | null; rec_model_id: string | null; enabled: boolean;
+  version: "5" | "6"; det_weight: string; rec_weight: string;
 };
 export type MatrixRow = {
   pipeline_id: string; pipeline_name: string; tests: number; successful_runs: number;
