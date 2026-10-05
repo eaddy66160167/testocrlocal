@@ -2,7 +2,7 @@
 import { t } from "@/lib/i18n/th";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Group, Image as KonvaImage, Layer, Rect, Stage, Text } from "react-konva";
+import { Group, Image as KonvaImage, Layer, Rect, Stage } from "react-konva";
 import type Konva from "konva";
 import {
   Crop,
@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { AutoROISuggestion, ROI, ViewerBox } from "@/types";
 import AutoROIOverlay from "./AutoROIOverlay";
+import FieldLabel from "./FieldLabel";
 import BoundingBoxLayer from "./BoundingBoxLayer";
 import TestRegionLayer from "./TestRegionLayer";
 
@@ -601,12 +602,12 @@ export default function DocumentViewer({
                 {globalFields?.filter(f => reviewMode || f.id !== selectedGlobalFieldId).map(field => reviewMode ? (
                   <Group key={field.id} name="global-layout-field" onClick={()=>onSelectGlobalField?.(field.id)} onTap={()=>onSelectGlobalField?.(field.id)} listening={!panMode}>
                     <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke={field.id===selectedGlobalFieldId?(globalFieldColor??"#7c3aed"):showAllFields?(globalFieldColor??"#2563eb"):undefined} strokeWidth={(field.id===selectedGlobalFieldId?3:2)/view.scale} fill={field.id===selectedGlobalFieldId?(globalFieldColor?"rgba(250,204,21,0.22)":"rgba(124,58,237,0.14)"):"rgba(0,0,0,0)"}/>
-                    {(showAllFields||field.id===selectedGlobalFieldId)&&<Text listening={false} x={field.roi.x1} y={Math.max(0,field.roi.y1-20/view.scale)} text={`Field ${String(field.field_index).padStart(2,"0")}${field.id===selectedGlobalFieldId?" •":""}`} fontSize={14/view.scale} fill={globalFieldColor??(field.id===selectedGlobalFieldId?"#7c3aed":"#2563eb")}/>}
+                    {(showAllFields||field.id===selectedGlobalFieldId)&&<FieldLabel x={field.roi.x1} y={field.roi.y1} scale={view.scale} text={`Field ${String(field.field_index).padStart(2,"0")}${field.id===selectedGlobalFieldId?" •":""}`} color={globalFieldColor??(field.id===selectedGlobalFieldId?"#7c3aed":"#2563eb")}/>}
                   </Group>
                 ) : (
                   <Group key={field.id} name="global-layout-field" onClick={() => onSelectGlobalField?.(field.id)} onTap={() => onSelectGlobalField?.(field.id)} listening={!regionMode && !panMode}>
                     <Rect x={field.roi.x1} y={field.roi.y1} width={field.roi.x2-field.roi.x1} height={field.roi.y2-field.roi.y1} stroke={selectedGlobalFieldIds.includes(field.id) ? "#7c3aed" : "#2563eb"} strokeWidth={(selectedGlobalFieldIds.includes(field.id) ? 3 : 2)/view.scale} fill={selectedGlobalFieldIds.includes(field.id) ? "rgba(124,58,237,0.18)" : "rgba(37,99,235,0.04)"} />
-                    <Text x={field.roi.x1} y={Math.max(0,field.roi.y1-18/view.scale)} text={`Field ${String(field.field_index).padStart(2,"0")}`} fontSize={13/view.scale} fill="#1d4ed8" />
+                    <FieldLabel x={field.roi.x1} y={field.roi.y1} scale={view.scale} text={`Field ${String(field.field_index).padStart(2,"0")}`} color="#1d4ed8" />
                   </Group>
                 ))}
                 {!!suggestions.length && onSelectSuggestion && (

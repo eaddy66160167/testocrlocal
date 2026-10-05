@@ -1,10 +1,10 @@
 "use client";
+import ErrorAnalysisText from "./ErrorAnalysisText";
 import { useState } from "react";
 import * as api from "@/lib/api";
 import type { FieldComparison, OCRField, PipelineRun } from "@/types";
 
 const rate = (value: number | null | undefined) => value == null ? "—" : `${(value * 100).toFixed(2)}%`;
-const names = { substitution: "อ่านผิด", insertion: "อ่านเกิน", deletion: "อ่านขาด" };
 
 function FieldCard({ field, caseId, runId, selected, onSelect, onSaved, disabled }: {
   field: OCRField; caseId: string; runId: string; selected: boolean; onSelect: () => void; onSaved: () => Promise<void>; disabled: boolean;
@@ -36,7 +36,7 @@ function FieldCard({ field, caseId, runId, selected, onSelect, onSaved, disabled
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {comparison && <div className="mt-2" aria-live="polite">
         <p className="text-xs">CER {rate(comparison.cer)} · WER {rate(comparison.wer)} · Exact Match {comparison.exact_match ? "ใช่" : "ไม่"}</p>
-        <p className="whitespace-pre-wrap break-words mt-2" aria-label="ผลเปรียบเทียบ OCR">{comparison.spans.map((span, i) => span.kind === "equal" ? <span key={i}>{span.text}</span> : <span key={i} data-testid="field-error" data-error-type={span.kind} className="text-red-700 underline decoration-2" title={`${names[span.kind]}: GT ${span.missing ?? "∅"}`} aria-label={`${names[span.kind]} ${span.kind === "deletion" ? span.missing : span.text}`}>{span.kind === "deletion" ? `⟦ขาด: ${span.missing}⟧` : span.text}</span>)}</p>
+        <ErrorAnalysisText evaluation={comparison} groundTruth={text}/>
         <p className="filter-note">ผลตรวจเป็น preview จนกด ยืนยัน GT Field · ขีดเส้นใต้สีแดง = อ่านผิด/เกิน; ⟦ขาด⟧ = อักขระที่ OCR ไม่ได้อ่าน</p>
       </div>}
     </details>

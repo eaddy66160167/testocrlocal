@@ -2,7 +2,8 @@
 import { t } from "@/lib/i18n/th";
 
 import { useEffect, useRef } from "react";
-import { Group, Rect, Text, Transformer } from "react-konva";
+import { Group, Rect, Transformer } from "react-konva";
+import FieldLabel from "./FieldLabel";
 import type Konva from "konva";
 import type { ROI } from "@/types";
 
@@ -99,18 +100,7 @@ export default function TestRegionLayer({
         onClick={onClick}
         onTap={onClick}
       />
-      <Text
-        x={roi.x1 + 7 / scale}
-        y={roi.y1 + 7 / scale}
-        text={label || t("TEST REGION")}
-        fontFamily="Tahoma, sans-serif"
-        fontSize={10 / scale}
-        fontStyle="bold"
-        letterSpacing={0}
-        fill="#4f46e5"
-        listening={false}
-        visible={regionWidth * scale > 110 && regionHeight * scale > 35}
-      />
+      <FieldLabel x={roi.x1} y={roi.y1} scale={scale} text={label || t("TEST REGION")} />
       {interactive && (
         <Transformer
           ref={transformerRef}

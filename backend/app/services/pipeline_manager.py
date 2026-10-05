@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.db.models import PipelineRun
 from app.integrations.model_gateway import GatewayError
+from app.integrations.batch_gateway import BatchGateway, BatchingClient
 from app.pipelines.dynamic import DynamicDetectionRecognitionAdapter, DynamicRecognitionAdapter, DynamicCustomAdapter, DynamicOfficialAdapter
 from app.services.metrics_service import normalize_text
 
@@ -10,6 +11,7 @@ from app.services.metrics_service import normalize_text
 class PipelineManager:
     def __init__(self, settings):
         self.settings = settings
+        self.batches = BatchGateway()
 
     @classmethod
     def requires_crop(cls, pipeline_id):
@@ -30,6 +32,8 @@ class PipelineManager:
                                    status="error", error_code="ADAPTER_NOT_CONFIGURED",
                                    error_message="No adapter is registered for this pipeline", boxes=[], request_id=request_id)
             adapter = adapter_class(config, self.settings)
+            if config.execution_mode in ("det_rec", "rec"):
+                adapter.gateway = BatchingClient(adapter.gateway, self.batches)
             try:
                 result = await adapter.run(
                     original_image=original_image,

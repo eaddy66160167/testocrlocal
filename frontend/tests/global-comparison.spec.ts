@@ -10,8 +10,9 @@ for(const width of [390,1440])test(`comparison scroll, pinned GT, modes and expl
  let calculations=0,failEvaluation=false;
  record.runs[0].fields![0].diagnostics={boxes:[{bbox:[12,13,90,24],crop_bbox:[2,3,80,14],polygon:[[12,13],[90,13],[90,24],[12,24]],text:"Detected text",confidence:.92},{bbox:[92,13,140,24],text:"Second detection",confidence:.9}]};
  const mutationRequests:string[]=[];
- record.global_fields![0].ground_truth_raw="GT 1\nLine2";
- record.runs[0].fields![0].evaluation={...evaluation,exact_match:false,normalized_ground_truth:"GT 1 Line2",normalized_ocr:"GT 1 LineX",spans:[{kind:"equal",text:"GT 1 Line"},{kind:"substitution",text:"X",missing:"2"}]};
+ record.global_fields![0].ground_truth_raw="GT 1\nLine2!";
+ record.runs[0].fields![0].evaluation={...evaluation,exact_match:false,normalized_ground_truth:"GT 1 Line2!",normalized_ocr:"GT 1 LineX",spans:[{kind:"equal",text:"GT 1 Line"},{kind:"substitution",text:"X",missing:"2"},{kind:"deletion",text:"",missing:"!"}]};
+ record.runs[0].document_evaluation={...evaluation,exact_match:false,normalized_ground_truth:"Whole GT",normalized_ocr:"Whole G",spans:[{kind:"equal",text:"Whole G"},{kind:"deletion",text:"",missing:"T"}]} as NonNullable<typeof record.runs[0]["document_evaluation"]>;
  page.on("request",req=>{if(req.method()!=="GET")mutationRequests.push(req.url());});
  await page.route("**/api/**",async route=>{
   const req=route.request(),url=new URL(req.url()).pathname;
@@ -67,6 +68,8 @@ for(const width of [390,1440])test(`comparison scroll, pinned GT, modes and expl
  await expect(analysis).toHaveCount(2);
  await expect(analysis.nth(1)).toContainText("GT: Line2");
  await expect(analysis.nth(1)).toContainText("OCR: LineX");
+ await expect(analysis.nth(1).locator('[data-error-type="deletion"]')).toHaveClass(/bg-amber-100/);
+ await expect(analysis.nth(1)).toContainText("⟦ขาด: !⟧");
  const beforeRequests=mutationRequests.length;
  await expect(scroll.locator("tbody").getByRole("button",{name:/Expand/})).toHaveCount(0);
  await page.getByRole("button",{name:"Expand Pipeline 1",exact:true}).click();
@@ -112,6 +115,9 @@ for(const width of [390,1440])test(`comparison scroll, pinned GT, modes and expl
  await expect(scroll.locator("tbody tr")).toHaveCount(1);
  await expect(scroll.getByRole("rowheader")).toContainText("Whole GT");
  await expect(scroll.getByTestId("global-result-pipeline-0")).toContainText("Whole OCR 1");
+ await scroll.getByTestId("global-result-pipeline-0").getByText("Error Analysis",{exact:true}).click();
+ await expect(scroll.getByTestId("global-result-pipeline-0").locator('[data-error-type="deletion"]')).toHaveClass(/bg-amber-100/);
+ await expect(scroll.getByTestId("global-result-pipeline-0")).toContainText("⟦ขาด: T⟧");
  await page.getByRole("button",{name:"Sub-fields",exact:true}).click();
  expect(calculations).toBe(0);
  await page.getByRole("button",{name:"กลับไปแก้ Ground Truth"}).click();

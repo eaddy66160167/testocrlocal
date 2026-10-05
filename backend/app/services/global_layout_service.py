@@ -1,3 +1,4 @@
+import asyncio
 """Canonical layout/GT identities and explicitly evaluated prediction snapshots."""
 
 from statistics import fmean
@@ -260,63 +261,67 @@ class GlobalLayoutService:
             for c in configs
         }
         with self.cases.images.open(source) as image:
-            # Sequential fields bound memory; independent pipelines stay concurrent.
-            for field in case.global_fields:
-                crop = self.cases.images.canonical_crop(image, field.roi)
-                results = await PipelineManager(self.cases.settings).run(
-                    configs, image, crop, field.roi, field.source
-                )
-                for result in results:
-                    parent = parents[result.pipeline_id]
-                    lines = reading_lines(result)
-                    trace_keys = (
-                        "input_sha256",
-                        "input_width",
-                        "input_height",
-                        "input_byte_size",
-                        "input_format",
-                        "crop_sha256",
-                        "crop_width",
-                        "crop_height",
-                        "crop_stage",
-                        "request_id",
-                        "gateway_request_id",
-                        "gateway_duration_ms",
-                        "gateway_service",
-                        "gateway_model",
-                        "detector_model",
-                        "recognizer_model",
-                        "processing_time_ms",
-                        "error_code",
-                        "error_message",
-                        "original_width",
-                        "original_height",
-                    )
-                    diagnostics = {key: getattr(result, key) for key in trace_keys}
-                    diagnostics.update(
-                        boxes=result.boxes,
-                        raw_text=result.raw_text,
-                        raw_response=result.raw_response,
-                        reading_lines=lines,
-                        ordering="top_then_left_within_global_field",
-                    )
-                    parent.fields.append(
-                        OCRField(
-                            global_field_id=field.id,
-                            field_index=field.field_index,
-                            geometry={"roi": field.roi},
-                            ocr_text="\n".join(lines),
-                            confidence=result.confidence,
-                            status=result.status,
-                            diagnostics=diagnostics,
+            manager = PipelineManager(self.cases.settings)
+            fields = sorted(case.global_fields, key=lambda field: field.field_index)
+            # Process bounded groups; the manager combines matching DET/REC requests.
+            for start in range(0, len(fields), 8):
+                batch = fields[start:start + 8]
+                results_by_field = await asyncio.gather(*(
+                    manager.run(configs, image, self.cases.images.canonical_crop(image, field.roi), field.roi, field.source)
+                    for field in batch
+                ))
+                for field, results in zip(batch, results_by_field):
+                    for result in results:
+                        parent = parents[result.pipeline_id]
+                        lines = reading_lines(result)
+                        trace_keys = (
+                            "input_sha256",
+                            "input_width",
+                            "input_height",
+                            "input_byte_size",
+                            "input_format",
+                            "crop_sha256",
+                            "crop_width",
+                            "crop_height",
+                            "crop_stage",
+                            "request_id",
+                            "gateway_request_id",
+                            "gateway_duration_ms",
+                            "gateway_service",
+                            "gateway_model",
+                            "detector_model",
+                            "recognizer_model",
+                            "processing_time_ms",
+                            "error_code",
+                            "error_message",
+                            "original_width",
+                            "original_height",
                         )
-                    )
-                    if result.status != "success":
-                        parent.status, parent.error_code = "error", "FIELD_PIPELINE_ERROR"
-                        parent.error_message = "One or more fields failed; successful field predictions remain available"
-                    parent.raw_response["global_fields"].append(
-                        {"global_field_id": field.id, "response": result.raw_response}
-                    )
+                        diagnostics = {key: getattr(result, key) for key in trace_keys}
+                        diagnostics.update(
+                            boxes=result.boxes,
+                            raw_text=result.raw_text,
+                            raw_response=result.raw_response,
+                            reading_lines=lines,
+                            ordering="top_then_left_within_global_field",
+                        )
+                        parent.fields.append(
+                            OCRField(
+                                global_field_id=field.id,
+                                field_index=field.field_index,
+                                geometry={"roi": field.roi},
+                                ocr_text="\n".join(lines),
+                                confidence=result.confidence,
+                                status=result.status,
+                                diagnostics=diagnostics,
+                            )
+                        )
+                        if result.status != "success":
+                            parent.status, parent.error_code = "error", "FIELD_PIPELINE_ERROR"
+                            parent.error_message = "One or more fields failed; successful field predictions remain available"
+                        parent.raw_response["global_fields"].append(
+                            {"global_field_id": field.id, "response": result.raw_response}
+                        )
         for parent in parents.values():
             parent.raw_text = "\n".join(f.diagnostics.get("raw_text") or "" for f in parent.fields)
             parent.final_text = canonical_document_text(case.global_fields, parent.fields)

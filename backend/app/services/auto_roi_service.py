@@ -1,4 +1,5 @@
 import math
+import re
 from uuid import uuid4
 
 from app.core.errors import AppError
@@ -6,6 +7,35 @@ from app.integrations.model_gateway import GatewayError, ModelGatewayClient
 from app.pipelines.normalizers import confidence, number
 from app.repositories.benchmark_repository import BenchmarkRepository
 from app.services.test_case_service import TestCaseService
+
+
+TEXT_REGION_TYPES = {
+    "text", "text_line", "text_block", "paragraph", "paragraph_title", "title",
+    "heading", "header", "footer", "caption", "figure_caption", "table_caption",
+    "document_title", "section_header", "page_header", "page_footer", "page_number",
+    "list", "list_item", "reference", "reference_content", "footnote", "abstract",
+}
+NON_TEXT_REGION_TYPES = {"image", "picture", "figure", "photo", "photograph", "illustration", "logo", "chart", "table", "seal", "stamp", "formula"}
+
+
+def is_text_region(region, *, text_only=False):
+    """Explicit layout classes take precedence over a text detector's default mode.
+
+    Older text-line responses contain only bbox/score; retain that contract, but
+    never infer a text class from numeric class IDs or unknown layout classes.
+    """
+    labels = []
+    for key in ("label", "type", "category", "class_name", "region_type", "block_label"):
+        value = region.get(key)
+        if value is not None and value != "":
+            if not isinstance(value, str):
+                return False
+            labels.append(re.sub(r"[\s-]+", "_", value.strip().lower()))
+    if labels:
+        return not any(label in NON_TEXT_REGION_TYPES for label in labels) and all(label in TEXT_REGION_TYPES for label in labels)
+    if "class_id" in region:
+        return False
+    return text_only or any(isinstance(region.get(key), str) and region[key].strip() for key in ("text", "rec_text"))
 
 
 class AutoROIService:
@@ -46,6 +76,8 @@ class AutoROIService:
             )
         for region in regions[:1000]:
             if not isinstance(region, dict):
+                continue
+            if not is_text_region(region, text_only=data.auto_roi_mode == "text-line" or "regions" not in result):
                 continue
             bbox = region.get("bbox")
             if isinstance(bbox, dict):
