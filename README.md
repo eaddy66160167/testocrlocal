@@ -52,11 +52,11 @@ Document Types include protected defaults and custom types. Names are trimmed, n
 
 System Logs search supports partial, case-insensitive Thai/English words across filename, pipeline, event, message and status. Multiple words are combined with AND; exact operational filters remain available through the API.
 
-History, Comparison and Analysis share URL filters `document_type_id` (business type), `category` (content tag), `pipeline`, `date_from`, and `date_to`. Date ranges filter **TestCase creation date**, not evaluation date. Dataset and Logs have independent scope. Page-local filename/status controls are explicitly labeled.
+History, Comparison and Analysis share only four URL filters: `document_type_id` (business type), `pipeline`, `date_from`, and `date_to`. Date ranges filter **TestCase creation date**, not evaluation date. Dataset and Logs have independent scope. Page-local filename/status controls are explicitly labeled. Obsolete `category` and `document` URL parameters are removed from these user pages and Dataset, so they cannot silently restrict visible results. Category metadata and document identifiers remain supported internally by the backend.
 
-Comparison uses a backend summary across the entire filter scope: unique cases, evaluated latest run-level results, coverage of unique evaluated cases, individual lowest final CER with provenance/ties, and fastest mean processing time with at least five measured successful latest runs. Global workflow processing time is the sum of Field durations, not page wall-clock. Analysis defaults to business document types; content tags are a separate view. Ranking requires five distinct eligible evaluated cases per Pipeline/group. Confirmed non-empty Sub-field subsets remain eligible under the existing evaluation rules.
+Comparison uses a backend summary across the entire filter scope: unique cases, evaluated latest run-level results, coverage of unique evaluated cases, individual lowest final CER with provenance/ties, and fastest mean processing time with at least five measured successful latest runs. Global workflow processing time is the sum of Field durations, not page wall-clock. Analysis groups exclusively by business document type. Ranking requires five distinct eligible evaluated cases per Pipeline/group. Confirmed non-empty Sub-field subsets remain eligible under the existing evaluation rules.
 
-Logs show human messages, severity, document/Pipeline and outcome first; IDs are expandable technical details. Links to deleted cases are replaced with an explicit unavailable indication. Operational retention of **90 days** is recommended; no automatic deletion job is implemented. Potential future uses include error counts, latency/failure alerts, top causes, KPI provenance checks and incident export.
+System Logs remain available directly at `/logs` for troubleshooting, with their API and storage intact, but are absent from normal navigation and History/Comparison links. This is navigation simplification, not access control; no authentication or roles have been added. Logs show human messages, severity, document/Pipeline and outcome first; IDs are expandable technical details. Links to deleted cases are replaced with an explicit unavailable indication. Operational retention of **90 days** is recommended; no automatic deletion job is implemented. Potential future uses include error counts, latency/failure alerts, top causes, KPI provenance checks and incident export.
 
 ## Local development (Windows PowerShell)
 
@@ -124,5 +124,6 @@ Backend health: https://ocrtest-production-095b.up.railway.app/api/health
 - [Thai FT v2 contract](docs/thai-ft-v2.md)
 - [Stage A analytics audit](docs/ux-kpi-log-audit.md)
 - [Stage B acceptance and regression evidence](docs/stage-b-validation.md)
+- [User-facing simplification acceptance](docs/user-facing-simplification.md)
 
 Gateway readiness may not describe individual variants; unknown readiness does not prevent a normal request. Missing historical files require restoration or re-upload. Auto Layout drafts are page/session-local until saved. The app has no user-authentication layer; deployment access belongs to the operator's network/platform controls.

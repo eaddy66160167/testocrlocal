@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Plus } from "lucide-react";
-import { getHistory, getCategories, getAnalyticsPipelines } from "@/lib/api";
+import { getHistory, getAnalyticsPipelines } from "@/lib/api";
 import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
-import { categoryLabel, t, userError, pipelineLabel } from "@/lib/i18n/th";
-import type { TestCase, Category, AnalyticsPipeline, QueryFilters } from "@/types";
+import { t, userError, pipelineLabel } from "@/lib/i18n/th";
+import type { TestCase, AnalyticsPipeline, QueryFilters } from "@/types";
 import {
   PageHeader,
   FilterBar,
@@ -21,7 +21,6 @@ import { percent } from "@/components/MatrixTable";
 export default function HistoryPage() {
   const router = useRouter();
   const [cases, setCases] = useState<TestCase[]>([]),
-    [categories, setCategories] = useState<Category[]>([]),
     [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
   const [filters, setFilters] = useAnalyticsFilters();
   const [search, setSearch] = useState(""),
@@ -47,14 +46,12 @@ export default function HistoryPage() {
       }
       await Promise.all([
         getHistory({ ...filters, limit: 21, offset }),
-        getCategories(),
         getAnalyticsPipelines(),
       ])
-        .then(([h, c, p]) => {
+        .then(([h, p]) => {
           if (active) {
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
-            setCategories(c);
             setPipelines(p);
           }
         })
@@ -130,7 +127,6 @@ export default function HistoryPage() {
         </label>
         <AnalyticsFilters
           value={filters}
-          categories={categories}
           pipelines={pipelines}
           onChange={filter}
         />
@@ -193,7 +189,7 @@ export default function HistoryPage() {
                     {[
                       "เอกสาร / หน้า",
                       "วันที่สร้างชุดทดสอบ (UTC)",
-                      "ประเภทข้อมูล",
+                      "ประเภทเอกสาร",
                       "สถานะ",
                       "ผลล่าสุดตาม Pipeline",
                       "การทำงาน",
@@ -221,7 +217,6 @@ export default function HistoryPage() {
                       <td>
                         <Link className="row-title" href={`/test/${c.id}`}>
                           {c.document.filename}
-                          <span className="block muted text-xs">{c.document.document_type_name||"ไม่ระบุประเภท"}</span>
                         </Link>
                         <span className="row-meta">
                           หน้า {c.page_number ?? 1} / {c.document.page_count}
@@ -238,15 +233,7 @@ export default function HistoryPage() {
                         </time>
                       </td>
                       <td>
-                        <div className="row-tags">
-                          {c.categories.length
-                            ? c.categories.map((cat) => (
-                                <span className="badge neutral" key={cat.code}>
-                                  {categoryLabel(cat)}
-                                </span>
-                              ))
-                            : "—"}
-                        </div>
+                        {c.document.document_type_name || "ไม่ระบุประเภท"}
                       </td>
                       <td>
                         <CaseStatus record={c} />
@@ -281,12 +268,6 @@ export default function HistoryPage() {
                         <div className="row-actions">
                           <Link className="button small" href={`/test/${c.id}`}>
                             เปิด
-                          </Link>
-                          <Link
-                            className="button small"
-                            href={`/logs?test_case_id=${c.id}`}
-                          >
-                            ดู Log
                           </Link>
                           <DeleteHistoryButton
                             id={c.id}

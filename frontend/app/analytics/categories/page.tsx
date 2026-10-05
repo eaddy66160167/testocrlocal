@@ -2,20 +2,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getAnalysisGroups, getAnalyticsSummary, getAnalyticsPipelines, getCategories } from "@/lib/api";
+import { getAnalysisGroups, getAnalyticsSummary, getAnalyticsPipelines } from "@/lib/api";
 import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
 import { userError } from "@/lib/i18n/th";
-import type { AnalyticsGroup, AnalyticsPipeline, AnalyticsSummary, Category } from "@/types";
+import type { AnalyticsGroup, AnalyticsPipeline, AnalyticsSummary } from "@/types";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
 import { percent } from "@/components/MatrixTable";
 import { PageHeader, FilterBar, LoadingState, EmptyState, Stat } from "@/components/ConsoleUI";
 
 export default function CategoryAnalyticsPage() {
   const [filters, setFilters] = useAnalyticsFilters();
-  const [dimension, setDimension] = useState<"document-types" | "categories">("document-types");
   const [data, setData] = useState<AnalyticsGroup[]>([]);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
   const [selectedCode, setSelectedCode] = useState("");
   const [showUntested, setShowUntested] = useState(false);
@@ -25,27 +23,23 @@ export default function CategoryAnalyticsPage() {
   useEffect(() => {
     let active = true;
     if (invalid) return;
-    Promise.all([getAnalysisGroups(dimension, filters), getAnalyticsSummary(filters), getCategories(), getAnalyticsPipelines()])
-      .then(([groups, scope, c, p]) => {if(active) {setData(groups); setSummary(scope); setCategories(c); setPipelines(p); setError("");}})
+    Promise.all([getAnalysisGroups("document-types", filters), getAnalyticsSummary(filters), getAnalyticsPipelines()])
+      .then(([groups, scope, p]) => {if(active) {setData(groups); setSummary(scope); setPipelines(p); setError("");}})
       .catch(e => {if(active) setError(userError(e.message));})
       .finally(()=>{if(active) setLoading(false);});
     return () => {active = false;};
-  }, [filters, dimension, invalid, revision]);
+  }, [filters, invalid, revision]);
   const visible = data.filter(g=>showUntested || g.test_cases > 0);
   const selected = visible.find(g=>g.code === selectedCode) ?? visible[0];
-  const historyScope = selected ? {...filters, ...(dimension === "categories" ? {category:selected.code} : selected.code !== "unassigned" ? {document_type_id:selected.code} : {})} : filters;
+  const historyScope = selected && selected.code !== "unassigned" ? {...filters, document_type_id:selected.code} : filters;
   return <div className="page-stack">
-    <PageHeader title="วิเคราะห์ประสิทธิภาพ" description="ดูว่า Pipeline ใดเหมาะกับเอกสารหรือข้อมูลแต่ละประเภท"
+    <PageHeader title="วิเคราะห์ประสิทธิภาพ" description="ดูว่า Pipeline ใดเหมาะกับเอกสารแต่ละประเภท"
       actions={<button className="button secondary" disabled={loading} onClick={()=>{setLoading(true);setRevision(n=>n+1);}}><RefreshCw size={16}/>รีเฟรช</button>} />
-    <div className="flex gap-2 flex-wrap" role="group" aria-label="มิติการวิเคราะห์">
-      {([ ["document-types", "ตามประเภทเอกสาร"], ["categories", "ตามประเภทข้อมูล"] ] as const).map(([key,label])=>
-        <button key={key} aria-pressed={dimension===key} className={`button ${dimension===key ? "primary" : "secondary"}`} onClick={()=>{setLoading(true);setDimension(key);setSelectedCode("");}}>{label}</button>)}
-    </div>
     <FilterBar count={Object.values(filters).filter(Boolean).length + Number(showUntested)} onClear={()=>{setFilters({});setShowUntested(false);}}>
-      <AnalyticsFilters value={filters} categories={categories} pipelines={pipelines} onChange={(key,value)=>{setLoading(true);setFilters(old=>({...old,[key]:value||undefined}));}} />
+      <AnalyticsFilters value={filters} pipelines={pipelines} onChange={(key,value)=>{setLoading(true);setFilters(old=>({...old,[key]:value||undefined}));}} />
       <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={showUntested} onChange={e=>setShowUntested(e.target.checked)}/>แสดงประเภทที่ยังไม่ทดสอบ</label>
     </FilterBar>
-    <p className="filter-note">ประเภทเอกสารคือประเภททางธุรกิจ · ประเภทข้อมูลคือ tag เนื้อหา · วันที่กรองคือวันที่สร้างชุดทดสอบ · ตัวกรองร่วมกับประวัติและเปรียบเทียบ</p>
+    <p className="filter-note">วิเคราะห์ตามประเภทเอกสารทางธุรกิจ · วันที่กรองคือวันที่สร้างชุดทดสอบ · ตัวกรองร่วมกับประวัติและเปรียบเทียบ</p>
     {invalid && <p className="error-banner" role="alert">วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น</p>}
     {error && <div className="error-banner" role="alert">โหลดข้อมูลวิเคราะห์ไม่ได้: {error}<button className="button small" onClick={()=>{setLoading(true);setRevision(n=>n+1);}}>ลองใหม่</button></div>}
     {loading && !invalid ? <LoadingState label="กำลังโหลดข้อมูลวิเคราะห์…"/> : !invalid && !error && <>
@@ -73,8 +67,8 @@ export default function CategoryAnalyticsPage() {
           </table>
         </div>
         {selected.code !== "unassigned" && <div className="panel-header"><Link className="button secondary" href={analyticsHref("/history",historyScope)}>ดูประวัติของประเภทนี้</Link></div>}
-      </section> : <section className="panel"><EmptyState title="ยังไม่มีชุดทดสอบในประเภทที่เลือก" description="ลองเปลี่ยนตัวกรอง หรือระบุประเภทเอกสารและประเภทข้อมูลให้ชุดทดสอบ"/></section>}
-      <p className="filter-note">ค่า CER ใช้ผลรันสุดท้ายที่ GT ยืนยัน · แต่ละชุดนับครั้งเดียวต่อ Pipeline · ชุดหนึ่งติด tag ได้หลายประเภท จึงไม่บวกจำนวนของแต่ละประเภทเป็นยอดรวม · Global workflow ใช้ผลรวมเวลา Field</p>
+      </section> : <section className="panel"><EmptyState title="ยังไม่มีชุดทดสอบในประเภทที่เลือก" description="ลองเปลี่ยนตัวกรอง หรือระบุประเภทเอกสารให้ชุดทดสอบ"/></section>}
+      <p className="filter-note">ค่า CER ใช้ผลรันสุดท้ายที่ GT ยืนยัน · แต่ละชุดนับครั้งเดียวต่อ Pipeline · Global workflow ใช้ผลรวมเวลา Field</p>
     </>}
   </div>;
 }

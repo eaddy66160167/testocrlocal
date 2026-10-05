@@ -3,11 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 const api = process.env.E2E_API_URL || "http://127.0.0.1:8100";
 let caseId: string;
+let documentTypeId: string;
 let cropId: string, fullId: string;
 const fixtureSuffix = `${Date.now()}-${process.pid}`;
 const cropName = `Console Crop ${fixtureSuffix}`;
 const fullName = `Console Full ${fixtureSuffix}`;
 test.beforeAll(async ({ request }) => {
+  const kind = await request.post(`${api}/api/document-types`, {data:{name:`Console Document ${fixtureSuffix}`}});
+  expect(kind.ok()).toBeTruthy();
+  documentTypeId = (await kind.json()).id;
   const pipelines = await Promise.all([cropName, fullName].map(async name => {
     const response = await request.post(`${api}/api/pipelines`, {data:{name,source:"custom",execution_mode:"integrated",version:"6",det_weight:"baseline",rec_weight:"baseline"}});
     expect(response.ok()).toBeTruthy();
@@ -17,6 +21,7 @@ test.beforeAll(async ({ request }) => {
   const doc = await (
     await request.post(`${api}/api/documents`, {
       multipart: {
+        document_type_id: documentTypeId,
         file: {
           name: "console-review.pdf",
           mimeType: "application/pdf",
@@ -88,20 +93,19 @@ for (const [width, height] of [
         fullPage: true,
       });
       const nav = page.locator('#console-navigation a[aria-current="page"]');
-      await expect(nav).toHaveCount(1);
+      await expect(nav).toHaveCount(route === "/logs" ? 0 : 1);
     }
     await page.locator('#console-navigation a[href="/history"]').click();
     await expect(page).toHaveURL(/\/history$/);
     expect(errors).toEqual([]);
   });
-test("library filters, detail tabs, missing metrics and category history links", async ({
+test("business library filters, detail tabs, missing metrics and history links", async ({
   page,
   request,
 }) => {
   await page.goto("/history?category=thai_text");
-  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveValue(
-    "thai_text",
-  );
+  await expect.poll(()=>new URL(page.url()).search).toBe("");
+  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveCount(0);
   await page.getByLabel("ค้นหาในหน้านี้", {exact:true}).fill("console-review.pdf");
   await page.locator(`a[href="/test/${caseId}"]`).first().click();
   await page.getByRole("tab", { name: cropName, exact: true }).click();
@@ -116,14 +120,12 @@ test("library filters, detail tabs, missing metrics and category history links",
     .click();
   await expect(page.getByText("SAME INPUT", { exact: true })).toBeVisible();
   await page.goto("/analytics/categories");
-  await page.getByRole("button", {name:"ตามประเภทข้อมูล",exact:true}).click();
+  await page.getByLabel("ประเภทเอกสาร (ธุรกิจ)").selectOption(documentTypeId);
   await expect(
     page.getByRole("columnheader", { name: "n ที่มี GT" }),
   ).toBeVisible();
-  await page.locator('main a[href="/history?category=thai_text"]').click();
-  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveValue(
-    "thai_text",
-  );
+  await page.locator(`main a[href="/history?document_type_id=${documentTypeId}"]`).click();
+  await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveValue(documentTypeId);
   const original = await (
     await request.get(`${api}/api/test-cases/${caseId}`)
   ).json();
@@ -264,7 +266,6 @@ test("local loading keeps navigation available and mobile sidebar reaches every 
     "/history",
     "/matrix",
     "/analytics/categories",
-    "/logs",
     "/settings/pipelines",
   ]) {
     await page.locator('[aria-controls="console-navigation"]').click();

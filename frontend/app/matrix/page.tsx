@@ -2,13 +2,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getCategories, getMatrix, getAnalyticsPipelines, getAnalyticsSummary, getHistory } from "@/lib/api";
+import { getMatrix, getAnalyticsPipelines, getAnalyticsSummary, getHistory } from "@/lib/api";
 import { useAnalyticsFilters } from "@/lib/analytics-scope";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
 import AnalyticsKpis from "@/components/AnalyticsKpis";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
-  Category,
   MatrixRow,
   AnalyticsPipeline,
   AnalyticsSummary,
@@ -24,7 +23,6 @@ import {
 export default function MatrixPage() {
   const [rows, setRows] = useState<MatrixRow[]>([]),
     [cases, setCases] = useState<TestCase[]>([]),
-    [categories, setCategories] = useState<Category[]>([]),
     [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]),
     [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [filters, setFilters] = useAnalyticsFilters();
@@ -52,16 +50,14 @@ export default function MatrixPage() {
       await Promise.all([
         getMatrix(filters),
         getHistory({ ...filters, limit: 21, offset }),
-        getCategories(),
         getAnalyticsPipelines(),
         getAnalyticsSummary(filters),
       ])
-        .then(([r, h, c, p, s]) => {
+        .then(([r, h, p, s]) => {
           if (active) {
             setRows(r);
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
-            setCategories(c);
             setPipelines(p);
             setSummary(s);
           }
@@ -118,7 +114,6 @@ export default function MatrixPage() {
       >
         <AnalyticsFilters
           value={filters}
-          categories={categories}
           pipelines={pipelines}
           onChange={(k, v) => {
             setFilters((old) => ({ ...old, [k]: v || undefined }));
@@ -132,21 +127,6 @@ export default function MatrixPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ชื่อเอกสาร"
-          />
-        </label>
-        <label className="field">
-          Document ID
-          <input
-            className="input"
-            value={filters.document || ""}
-            onChange={(e) => {
-              setFilters((old) => ({
-                ...old,
-                document: e.target.value || undefined,
-              }));
-              setOffset(0);
-            }}
-            placeholder="UUID"
           />
         </label>
       </FilterBar>
@@ -240,12 +220,7 @@ export default function MatrixPage() {
                                   {!r ? (
                                     <span className="muted">ยังไม่ทดสอบ</span>
                                   ) : r.status === "error" ? (
-                                    <Link
-                                      className="badge error"
-                                      href={`/logs?test_case_id=${c.id}`}
-                                    >
-                                      ผิดพลาด · ดู Log
-                                    </Link>
+                                    <span className="badge error">ประมวลผลไม่สำเร็จ</span>
                                   ) : (
                                     <>
                                       <strong>

@@ -18,12 +18,16 @@ Sub-fields share one correct text across pipelines. Whole Field evaluates the or
 
 ## History
 
-Reopen saved results, layout and evaluation. One selected successful pipeline plus completed evaluation is sufficient for success. A selected pipeline failure gives partial/error status according to the actual results, not the number of available models.
+Reopen saved results, layout and evaluation. Filter by business document type, Pipeline and TestCase creation dates; filename/status searches apply to the current page. One selected successful pipeline plus completed evaluation is sufficient for success. A selected pipeline failure gives partial/error status according to the actual results, not the number of available models.
+
+## Comparison and Analysis
+
+Comparison answers which Pipeline performs best overall. Analysis compares Pipelines by business document type and ranks only those with at least five distinct eligible evaluated cases. Historical Pipelines remain visible with archived labels. History, Comparison and Analysis preserve the same business-type/Pipeline/creation-date scope when navigating between them. Content category controls and manual Document UUID filters are not part of these user pages; obsolete URL parameters are removed rather than applied invisibly.
 
 ## Dataset Builder
 
-Recently evaluated/updated eligible samples appear first. Filter by document type or existing filters, choose available confirmed samples and export ZIP. Images come from original source crops; labels come only from confirmed GT. Removing a sample requires confirmation and excludes it from future exports. It does not delete its document, OCR, metrics or GT. Missing source files must be restored or re-uploaded; the app never fabricates replacements.
+Recently evaluated/updated eligible samples appear first. Filter by business document type, choose available confirmed samples and export ZIP. Category and Document UUID filters are not shown or silently applied. Images come from original source crops; labels come only from confirmed GT. Removing a sample requires confirmation and excludes it from future exports. It does not delete its document, OCR, metrics or GT. Missing source files must be restored or re-uploaded; the app never fabricates replacements.
 
-## System Logs
+## System Logs (developer troubleshooting)
 
-Search parts of filenames, pipeline names (for example `hutch` or `fine`), event/action text and Thai/English words. Searches ignore case; multiple words must each match. Use level/pipeline/date filters to narrow results. Logs do not store raw OCR/GT or uploaded content.
+Open `/logs` directly; it is no longer in normal navigation or History/Comparison links. Hiding navigation does not restrict access. Search parts of filenames, pipeline names (for example `hutch` or `fine`), event/action text and Thai/English words. Searches ignore case; multiple words must each match. Use level/pipeline/date filters to narrow results. Logs do not store raw OCR/GT or uploaded content.

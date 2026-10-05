@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import * as api from "@/lib/api";
-import type { Category, DocumentType } from "@/types";
-import { categoryLabel, userError } from "@/lib/i18n/th";
+import type { DocumentType } from "@/types";
+import { userError } from "@/lib/i18n/th";
+import { removeInternalUserFilters } from "@/lib/analytics-scope";
 import { PageHeader, EmptyState, LoadingState } from "@/components/ConsoleUI";
 
 export default function DatasetPage() {
@@ -12,13 +13,11 @@ export default function DatasetPage() {
     total: number;
     items: api.DatasetSample[];
   }>({ total: 0, items: [] });
-  const [categories, setCategories] = useState<Category[]>([]);
   const [types,setTypes]=useState<DocumentType[]>([]),[documentType,setDocumentType]=useState("");
   const [removing,setRemoving]=useState<api.DatasetSample|null>(null),[removeBusy,setRemoveBusy]=useState(false);
   const removeDialog=useRef<HTMLDialogElement>(null);
   useEffect(()=>{if(removing)removeDialog.current?.showModal();else removeDialog.current?.close();},[removing]);
-  const [category, setCategory] = useState(""),
-    [documentId, setDocumentId] = useState("");
+  useEffect(() => { removeInternalUserFilters(); }, []);
   const [selected, setSelected] = useState<string[]>([]);
   const [offset, setOffset] = useState(0),
     [revision, setRevision] = useState(0);
@@ -36,17 +35,13 @@ export default function DatasetPage() {
           offset: String(offset),
           limit: "50",
         });
-        if (category) params.set("category", category);
-        if (documentId) params.set("document", documentId);
         if (documentType) params.set("document_type",documentType);
-        const [samples, tags, kinds] = await Promise.all([
+        const [samples, kinds] = await Promise.all([
           api.getDatasetSamples(params),
-          api.getCategories(),
           api.getDocumentTypes(),
         ]);
         if (active) {
           setData(samples);
-          setCategories(tags);
           setTypes(kinds);
         }
       } catch (e) {
@@ -64,7 +59,7 @@ export default function DatasetPage() {
     return () => {
       active = false;
     };
-  }, [category, documentId, documentType, offset, revision]);
+  }, [documentType, offset, revision]);
   async function remove(){if(!removing)return;setRemoveBusy(true);try{await api.excludeDatasetSample(removing.id,removing.global_field_id?"field":"case");setSelected(old=>old.filter(id=>id!==removing.id&&id!==`field:${removing.id}`));setRemoving(null);setRevision(v=>v+1);}catch(e){setError(userError(e instanceof Error?e.message:"ลบไม่สำเร็จ"));}finally{setRemoveBusy(false);}}
   async function download() {
     setExporting(true);
@@ -104,38 +99,7 @@ export default function DatasetPage() {
       />
       <section className="panel panel-body">
         <div className="flex flex-wrap items-end gap-3">
-          <label>ประเภทเอกสาร<select className="select" value={documentType} onChange={e=>{setDocumentType(e.target.value);setOffset(0);setSelected([]);}}><option value="">ทั้งหมด</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-          <label>
-            ประเภทข้อมูล
-            <select
-              className="select"
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setOffset(0);
-                setSelected([]);
-              }}
-            >
-              <option value="">ทั้งหมด</option>
-              {categories.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {categoryLabel(c)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Document ID
-            <input
-              className="input"
-              value={documentId}
-              onChange={(e) => {
-                setDocumentId(e.target.value);
-                setOffset(0);
-                setSelected([]);
-              }}
-            />
-          </label>
+          <label>ประเภทเอกสาร (ธุรกิจ)<select aria-label="ประเภทเอกสาร (ธุรกิจ)" className="select" value={documentType} onChange={e=>{setDocumentType(e.target.value);setOffset(0);setSelected([]);}}><option value="">ทั้งหมด</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <button
             className="button secondary"
             disabled={loading || exporting}
@@ -203,7 +167,6 @@ export default function DatasetPage() {
                     <th>ภาพ ROI</th>
                     <th>ต้นฉบับ</th>
                     <th>Confirmed Ground Truth</th>
-                    <th>ประเภท</th>
                     <th><span className="sr-only">จัดการ</span></th>
                   </tr>
                 </thead>
@@ -261,13 +224,6 @@ export default function DatasetPage() {
                           {sample.ground_truth_raw ||
                             "(ข้อความว่างที่ยืนยันแล้ว)"}
                         </div>
-                      </td>
-                      <td>
-                        {sample.categories
-                          .map((c) =>
-                            categoryLabel({ code: c, display_name: c }),
-                          )
-                          .join(", ") || "—"}
                       </td>
                       <td><button className="button small secondary" disabled={exporting} onClick={()=>setRemoving(sample)}>ลบออกจาก Dataset</button></td>
                     </tr>

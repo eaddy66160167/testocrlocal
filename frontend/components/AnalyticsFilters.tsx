@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getDocumentTypes } from "@/lib/api";
-import { categoryLabel } from "@/lib/i18n/th";
-import type { AnalyticsPipeline, Category, DocumentType, QueryFilters } from "@/types";
+import type { AnalyticsPipeline, DocumentType, QueryFilters } from "@/types";
 
-export default function AnalyticsFilters({value, categories, pipelines, onChange}: {
-  value: QueryFilters; categories: Category[]; pipelines: AnalyticsPipeline[];
+export default function AnalyticsFilters({value, pipelines, onChange}: {
+  value: QueryFilters; pipelines: AnalyticsPipeline[];
   onChange: (key: keyof QueryFilters, value: string) => void;
 }) {
   const [types, setTypes] = useState<DocumentType[]>([]);
@@ -23,11 +22,6 @@ export default function AnalyticsFilters({value, categories, pipelines, onChange
         {types.map(t=><option key={t.id} value={t.id}>{t.name}{!t.active ? " · เก็บถาวร" : ""}</option>)}
         {value.document_type_id && !types.some(t=>t.id===value.document_type_id) && <option value={value.document_type_id}>ประเภทที่เลือก (เก็บถาวร)</option>}
       </select>{error && <span className="text-xs text-red-700">โหลดประเภทเอกสารไม่สำเร็จ</span>}
-    </label>
-    <label className="field">ประเภทข้อมูล
-      <select aria-label="ประเภทข้อมูล" className="select" value={value.category || ""} onChange={e=>onChange("category",e.target.value)}>
-        <option value="">ทุกประเภทข้อมูล</option>{categories.map(c=><option key={c.id} value={c.code}>{categoryLabel(c)}</option>)}
-      </select>
     </label>
     <label className="field">Pipeline
       <select aria-label="Pipeline" className="select" value={value.pipeline || ""} onChange={e=>onChange("pipeline",e.target.value)}>

@@ -1,9 +1,9 @@
 "use client";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { QueryFilters } from "@/types";
 
-const keys = ["document_type_id", "category", "pipeline", "date_from", "date_to"] as const;
+const keys = ["document_type_id", "pipeline", "date_from", "date_to"] as const;
 const paths = ["/history", "/matrix", "/analytics/categories"];
 function subscribe(listener: () => void) {
   window.addEventListener("popstate", listener);
@@ -17,7 +17,15 @@ function snapshot() { return window.location.search; }
 function serverSnapshot() { return ""; }
 function read(search: string): QueryFilters {
   const params = new URLSearchParams(search);
-  return Object.fromEntries([...keys, "document"].flatMap(key => params.get(key) ? [[key, params.get(key)!]] : []));
+  return Object.fromEntries(keys.flatMap(key => params.get(key) ? [[key, params.get(key)!]] : []));
+}
+export function removeInternalUserFilters() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has("category") && !params.has("document")) return;
+  params.delete("category");
+  params.delete("document");
+  window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}${window.location.hash}`);
+  window.dispatchEvent(new Event("analytics-scope"));
 }
 export function analyticsHref(path: string, filters: QueryFilters): string {
   const params = new URLSearchParams();
@@ -27,10 +35,13 @@ export function analyticsHref(path: string, filters: QueryFilters): string {
 export function useAnalyticsFilters(): [QueryFilters, Dispatch<SetStateAction<QueryFilters>>] {
   const search = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const filters = useMemo(() => read(search), [search]);
+  useEffect(() => { removeInternalUserFilters(); }, [search]);
   const setFilters = useCallback((next: SetStateAction<QueryFilters>) => {
     const value = typeof next === "function" ? next(read(window.location.search)) : next;
     const params = new URLSearchParams(window.location.search);
-    for (const key of [...keys, "document"] as const) {
+    params.delete("category");
+    params.delete("document");
+    for (const key of keys) {
       if (value[key]) params.set(key, String(value[key])); else params.delete(key);
     }
     window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
