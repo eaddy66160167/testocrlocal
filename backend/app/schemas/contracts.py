@@ -175,6 +175,7 @@ class PipelineConfigUpdate(InputModel):
 
 
 class BenchmarkFilters(BaseModel):
+    document_type_id: UUID | None = None
     category: str | None = None
     pipeline: str | None = Field(default=None, max_length=50)
     date_from: date | None = None

@@ -37,9 +37,15 @@ def test_document_types_validation_archive_and_history(client, png):
 
 
 def evaluated(client, document):
+    rec = next(m for m in client.get("/api/pipelines/models").json()
+               if m["kind"] == "rec" and m["source"] == "custom" and m["weight"] == "thai_ft_v2" and m["version"] == "5")
+    created = client.post("/api/pipelines", json={"name":"Hutch fine tune validation", "source":"custom",
+        "execution_mode":"rec", "rec_model_id":rec["id"]})
+    assert created.status_code == 201, created.text
+    pipeline = created.json()["pipeline_id"]
     case, fields = layout(client, document, count=1)
     root = f"/api/test-cases/{case['id']}"
-    assert client.post(root + "/run", json={"pipelines": ["hutch_fine_tune_v2"]}).status_code == 200
+    assert client.post(root + "/run", json={"pipelines": [pipeline]}).status_code == 200
     client.put(root + f"/global-fields/{fields[0]['id']}/ground-truth", json={"ground_truth_raw": "confirmed label"})
     assert client.post(root + "/evaluate", json={"mode": "auto", "global_field_ids": [fields[0]["id"]]}).status_code == 200
     return root, fields[0]["id"]
@@ -89,9 +95,12 @@ def test_0009_additive_upgrade_preserves_old_document_and_no_drift():
         command.upgrade(cfg,"0008_global_layout_evaluation")
         id=str(uuid4())
         connection.execute(text("INSERT INTO documents(id,filename,mime_type,width,height,storage_key,created_at) VALUES(:id,'preserved.png','image/png',30,20,:key,now())"),{"id":id,"key":id})
-        command.upgrade(cfg,"head")
+        command.upgrade(cfg,"0009_document_types_dataset")
         assert connection.execute(text("SELECT filename,document_type_id FROM documents WHERE id=:id"),{"id":id}).one()==("preserved.png",None)
         assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()=="0009_document_types_dataset"
+        command.upgrade(cfg,"head")
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()=="0010_dynamic_pipelines"
+        assert connection.execute(text("SELECT filename FROM documents WHERE id=:id"),{"id":id}).scalar_one()=="preserved.png"
         previous=connection.dialect.default_schema_name
         connection.dialect.default_schema_name=schema
         try:

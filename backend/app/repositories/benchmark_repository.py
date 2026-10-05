@@ -1,10 +1,10 @@
 from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import AppError
-from app.db.models import Category, Document, PipelineConfig, PipelineRun, TestCase
+from app.db.models import Category, Document, OCRField, PipelineConfig, PipelineRun, TestCase
 from app.schemas.contracts import BenchmarkFilters
 
 
@@ -50,13 +50,21 @@ class BenchmarkRepository:
         return record
 
     def cases(
-        self, filters: BenchmarkFilters, limit: int | None = None, offset: int = 0, *, runs_only=False
+        self, filters: BenchmarkFilters, limit: int | None = None, offset: int = 0, *, runs_only=False,
+        analytics=False,
     ) -> list[TestCase]:
         query = select(TestCase)
+        if analytics:
+            query = query.options(
+                selectinload(TestCase.runs).defer(PipelineRun.raw_response).defer(PipelineRun.boxes),
+                selectinload(TestCase.runs).selectinload(PipelineRun.fields).defer(OCRField.diagnostics),
+            )
         if runs_only:
             query = query.where(TestCase.runs.any())
         if filters.category:
             query = query.where(TestCase.categories.any(Category.code == filters.category))
+        if filters.document_type_id:
+            query = query.where(TestCase.document.has(Document.document_type_id == str(filters.document_type_id)))
         if filters.pipeline:
             query = query.where(TestCase.runs.any(PipelineRun.pipeline_id == filters.pipeline))
         if filters.document:

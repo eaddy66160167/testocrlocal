@@ -2,31 +2,33 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getCategories, getMatrix, getPipelines, getHistory } from "@/lib/api";
+import { getCategories, getMatrix, getAnalyticsPipelines, getAnalyticsSummary, getHistory } from "@/lib/api";
+import { useAnalyticsFilters } from "@/lib/analytics-scope";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
+import AnalyticsKpis from "@/components/AnalyticsKpis";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
   Category,
   MatrixRow,
-  PipelineConfig,
-  QueryFilters,
+  AnalyticsPipeline,
+  AnalyticsSummary,
   TestCase,
 } from "@/types";
 import MatrixTable, { percent } from "@/components/MatrixTable";
 import {
   PageHeader,
   FilterBar,
-  DatasetFilters,
   LoadingState,
   EmptyState,
-  Stat,
 } from "@/components/ConsoleUI";
 export default function MatrixPage() {
   const [rows, setRows] = useState<MatrixRow[]>([]),
     [cases, setCases] = useState<TestCase[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
-    [pipelines, setPipelines] = useState<PipelineConfig[]>([]);
-  const [filters, setFilters] = useState<QueryFilters>({}),
-    [offset, setOffset] = useState(0),
+    [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]),
+    [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [filters, setFilters] = useAnalyticsFilters();
+  const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
     [search, setSearch] = useState(""),
     [onlyGT, setOnlyGT] = useState(false),
@@ -51,15 +53,17 @@ export default function MatrixPage() {
         getMatrix(filters),
         getHistory({ ...filters, limit: 21, offset }),
         getCategories(),
-        getPipelines(),
+        getAnalyticsPipelines(),
+        getAnalyticsSummary(filters),
       ])
-        .then(([r, h, c, p]) => {
+        .then(([r, h, c, p, s]) => {
           if (active) {
             setRows(r);
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
             setCategories(c);
             setPipelines(p);
+            setSummary(s);
           }
         })
         .catch((e) => {
@@ -74,12 +78,6 @@ export default function MatrixPage() {
       active = false;
     };
   }, [filters, offset, revision, invalid]);
-  const best = rows
-    .filter((r) => r.cer !== null)
-    .sort((a, b) => a.cer! - b.cer!)[0];
-  const fastest = rows
-    .filter((r) => r.avg_time_ms !== null && r.successful_runs > 0)
-    .sort((a, b) => a.avg_time_ms! - b.avg_time_ms!)[0];
   const visible = cases.filter(
     (c) =>
       (!onlyGT || c.ground_truth_raw !== null) &&
@@ -118,7 +116,7 @@ export default function MatrixPage() {
           setOffset(0);
         }}
       >
-        <DatasetFilters
+        <AnalyticsFilters
           value={filters}
           categories={categories}
           pipelines={pipelines}
@@ -174,36 +172,8 @@ export default function MatrixPage() {
         !invalid &&
         !error && (
           <>
-            <div className="stat-grid">
-              <Stat
-                label="ชุดทดสอบในหน้าตารางนี้"
-                value={cases.length}
-                note={`มี Ground Truth ${cases.filter((c) => c.ground_truth_raw !== null).length} ชุด`}
-              />
-              <Stat
-                label="ผลที่ประเมินความแม่นยำแล้ว"
-                value={rows.reduce((n, r) => n + r.evaluated_runs, 0)}
-                note="จำนวนผลจากทุก Pipeline ตามตัวกรอง API"
-              />
-              <Stat
-                label="CER ต่ำที่สุด ↓"
-                value={percent(best?.cer)}
-                note={
-                  best
-                    ? pipelineLabel(best.pipeline_id, best.pipeline_name)
-                    : "ต้องมี Ground Truth"
-                }
-              />
-              <Stat
-                label="Pipeline ที่เร็วที่สุด ↓"
-                value={fastest ? `${Math.round(fastest.avg_time_ms!)} ms` : "—"}
-                note={
-                  fastest
-                    ? pipelineLabel(fastest.pipeline_id, fastest.pipeline_name)
-                    : "ยังไม่มีผลสำเร็จ"
-                }
-              />
-            </div>
+            {summary && <AnalyticsKpis summary={summary} />}
+            <p className="filter-note">KPI และภาพรวมใช้ตัวกรองร่วมทั้งขอบเขต · Global workflow ใช้ผลรวมเวลา Field ไม่ใช่เวลารอทั้งหน้า · ค้นหาและ GT ด้านล่างมีผลเฉพาะหน้านี้</p>
             {cases.length ? (
               <section className="panel">
                 <div className="panel-header">
@@ -239,7 +209,7 @@ export default function MatrixPage() {
                           <th scope="col">เอกสาร / หน้า</th>
                           {selected.map((p) => (
                             <th scope="col" key={p.pipeline_id}>
-                              {pipelineLabel(p.pipeline_id, p.name)}
+                              {pipelineLabel(p.pipeline_id, p.pipeline_name)}{p.retired && <span className="badge neutral">เก็บถาวร</span>}
                             </th>
                           ))}
                         </tr>
@@ -311,7 +281,7 @@ export default function MatrixPage() {
                 )}
                 <div className="table-footer">
                   <span>
-                    หน้า {offset / 20 + 1} · {visible.length} ชุด
+                    หน้า {offset / 20 + 1} · แสดง {visible.length} รายการในหน้านี้ จาก {summary?.history_cases ?? "—"} ชุดที่เคยรัน
                   </span>
                   <div>
                     <button

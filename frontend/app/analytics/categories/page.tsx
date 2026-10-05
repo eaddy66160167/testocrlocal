@@ -2,264 +2,79 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getCategoryAnalytics, getCategories, getPipelines } from "@/lib/api";
-import { categoryLabel, pipelineLabel, userError } from "@/lib/i18n/th";
-import type {
-  CategoryAnalytics,
-  Category,
-  PipelineConfig,
-  QueryFilters,
-} from "@/types";
+import { getAnalysisGroups, getAnalyticsSummary, getAnalyticsPipelines, getCategories } from "@/lib/api";
+import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
+import { userError } from "@/lib/i18n/th";
+import type { AnalyticsGroup, AnalyticsPipeline, AnalyticsSummary, Category } from "@/types";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
 import { percent } from "@/components/MatrixTable";
-import {
-  PageHeader,
-  FilterBar,
-  DatasetFilters,
-  LoadingState,
-  EmptyState,
-  Stat,
-} from "@/components/ConsoleUI";
+import { PageHeader, FilterBar, LoadingState, EmptyState, Stat } from "@/components/ConsoleUI";
+
 export default function CategoryAnalyticsPage() {
-  const [data, setData] = useState<CategoryAnalytics[]>([]),
-    [categories, setCategories] = useState<Category[]>([]),
-    [pipelines, setPipelines] = useState<PipelineConfig[]>([]),
-    [filters, setFilters] = useState<QueryFilters>({}),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState(""),
-    [revision, setRevision] = useState(0),
-    [showUntested, setShowUntested] = useState(false);
-  const invalid = !!(
-    filters.date_from &&
-    filters.date_to &&
-    filters.date_from > filters.date_to
-  );
+  const [filters, setFilters] = useAnalyticsFilters();
+  const [dimension, setDimension] = useState<"document-types" | "categories">("document-types");
+  const [data, setData] = useState<AnalyticsGroup[]>([]);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
+  const [selectedCode, setSelectedCode] = useState("");
+  const [showUntested, setShowUntested] = useState(false);
+  const [loading, setLoading] = useState(true), [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const invalid = !!(filters.date_from && filters.date_to && filters.date_from > filters.date_to);
   useEffect(() => {
     let active = true;
-    async function load() {
-      setLoading(true);
-      setError("");
-      if (invalid) {
-        setLoading(false);
-        return;
-      }
-      await Promise.all([
-        getCategoryAnalytics(filters),
-        getCategories(),
-        getPipelines(),
-      ])
-        .then(([d, c, p]) => {
-          if (active) {
-            setData(d);
-            setCategories(c);
-            setPipelines(p);
-          }
-        })
-        .catch((e) => {
-          if (active) setError(userError(e.message));
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }
-    void load();
-    return () => {
-      active = false;
-    };
-  }, [filters, invalid, revision]);
-  const visible = data.filter((c) => showUntested || c.test_cases > 0);
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="วิเคราะห์ตามประเภทข้อมูล"
-        description="ค้นหาว่าแต่ละ Pipeline ทำงานได้ดีเพียงใดกับประเภทเอกสารที่คุณกำหนด"
-        actions={
-          <button
-            className="button secondary"
-            disabled={loading}
-            onClick={() => setRevision((n) => n + 1)}
-          >
-            <RefreshCw size={16} />
-            รีเฟรช
-          </button>
-        }
-      />
-      <FilterBar
-        count={
-          Object.values(filters).filter(Boolean).length + Number(showUntested)
-        }
-        onClear={() => {
-          setFilters({});
-          setShowUntested(false);
-        }}
-      >
-        <DatasetFilters
-          value={filters}
-          categories={categories}
-          pipelines={pipelines}
-          onChange={(k, v) =>
-            setFilters((old) => ({ ...old, [k]: v || undefined }))
-          }
-        />
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={showUntested}
-            onChange={(e) => setShowUntested(e.target.checked)}
-          />
-          แสดงประเภทที่ยังไม่ทดสอบ
-        </label>
-      </FilterBar>
-      {invalid && (
-        <div className="error-banner" role="alert">
-          วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น
-        </div>
-      )}
-      {error && (
-        <div className="error-banner" role="alert">
-          ไม่สามารถโหลดข้อมูลวิเคราะห์ได้: {error}{" "}
-          <button
-            className="button small"
-            onClick={() => setRevision((n) => n + 1)}
-          >
-            ลองใหม่
-          </button>
-        </div>
-      )}
-      {loading ? (
-        <LoadingState label="กำลังโหลดข้อมูลวิเคราะห์…" />
-      ) : (
-        !error &&
-        !invalid && (
-          <>
-            <div className="stat-grid">
-              <Stat label="ประเภทข้อมูลในมุมมองนี้" value={data.length} />
-              <Stat
-                label="ประเภทที่มีชุดทดสอบ"
-                value={data.filter((c) => c.test_cases > 0).length}
-              />
-              <Stat
-                label="ประเภทที่มีผลประเมิน GT"
-                value={
-                  data.filter((c) =>
-                    c.pipelines.some((p) => p.evaluated_runs > 0),
-                  ).length
-                }
-              />
-              <Stat
-                label="จำนวนการติดประเภทข้อมูล"
-                value={data.reduce((s, c) => s + c.test_cases, 0)}
-                note="ชุดทดสอบหนึ่งชุดอยู่ได้หลายประเภท"
-              />
-            </div>
-            {visible.length ? (
-              <section className="panel">
-                <div className="panel-header">
-                  <h2>ประสิทธิภาพแยกตามประเภท</h2>
-                  <span className="muted text-xs">
-                    คลิกประเภทเพื่อเปิดประวัติที่เกี่ยวข้อง
-                  </span>
-                </div>
-                <div
-                  className="table-wrap"
-                  tabIndex={0}
-                  role="region"
-                  aria-label="ตารางข้อมูล เลื่อนแนวนอนเพื่อดูคอลัมน์เพิ่มเติม"
-                >
-                  <table className="data-table" style={{ minWidth: 1050 }}>
-                    <caption className="sr-only">
-                      จำนวนตัวอย่างและความแม่นยำต่อประเภทและ Pipeline
-                    </caption>
-                    <thead>
-                      <tr>
-                        {[
-                          "ประเภท / ชุดทดสอบ",
-                          "Pipeline",
-                          "ตัวอย่าง / มี GT",
-                          "สำเร็จ / ผิดพลาด",
-                          "CER ↓",
-                          "WER ↓",
-                          "Exact ↑",
-                          "เวลาเฉลี่ย ↓",
-                          "Confidence ↑",
-                        ].map((h) => (
-                          <th key={h} scope="col">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visible.flatMap((c) =>
-                        c.pipelines.map((p, i) => (
-                          <tr key={`${c.code}:${p.pipeline_id}`}>
-                            {i === 0 && (
-                              <td rowSpan={c.pipelines.length}>
-                                <Link
-                                  href={`/history?category=${encodeURIComponent(c.code)}`}
-                                  className="row-title"
-                                >
-                                  {categoryLabel(c)}
-                                </Link>
-                                <span className="row-meta">
-                                  {c.test_cases} ชุดทดสอบ
-                                </span>
-                              </td>
-                            )}
-                            <td>
-                              {pipelineLabel(p.pipeline_id, p.pipeline_name)}
-                            </td>
-                            <td className="numeric">
-                              {p.tests} / {p.evaluated_runs}
-                            </td>
-                            <td className="numeric">
-                              {p.successful_runs} /{" "}
-                              <span
-                                className={p.failed_runs ? "text-red-700" : ""}
-                              >
-                                {p.failed_runs}
-                              </span>
-                            </td>
-                            <td className="numeric">{percent(p.cer)}</td>
-                            <td className="numeric">{percent(p.wer)}</td>
-                            <td className="numeric">
-                              {percent(p.exact_match_rate)}
-                            </td>
-                            <td className="numeric">
-                              {p.avg_time_ms === null
-                                ? "—"
-                                : `${Math.round(p.avg_time_ms)} ms`}
-                            </td>
-                            <td className="numeric">
-                              {percent(p.avg_confidence)}
-                            </td>
-                          </tr>
-                        )),
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ) : (
-              <section className="panel">
-                <EmptyState
-                  title="ยังไม่มีข้อมูลเพียงพอสำหรับวิเคราะห์"
-                  description="กำหนดประเภทข้อมูลให้ชุดทดสอบ แล้วรัน OCR และบันทึก Ground Truth"
-                  action={
-                    <Link className="button primary" href="/">
-                      เริ่มทดสอบ OCR
-                    </Link>
-                  }
-                />
-              </section>
-            )}
-            <p className="filter-note">
-              ประเภทข้อมูลเป็น metadata เท่านั้น ไม่ส่งให้โมเดล ·
-              ค่าเฉลี่ยใช้ตัวอย่างที่มีข้อมูลจริง และแสดง — เมื่อไม่มี GT /
-              confidence · จำนวนการติดประเภทไม่ใช่จำนวนชุดทดสอบที่ไม่ซ้ำกัน
-            </p>
-          </>
-        )
-      )}
+    if (invalid) return;
+    Promise.all([getAnalysisGroups(dimension, filters), getAnalyticsSummary(filters), getCategories(), getAnalyticsPipelines()])
+      .then(([groups, scope, c, p]) => {if(active) {setData(groups); setSummary(scope); setCategories(c); setPipelines(p); setError("");}})
+      .catch(e => {if(active) setError(userError(e.message));})
+      .finally(()=>{if(active) setLoading(false);});
+    return () => {active = false;};
+  }, [filters, dimension, invalid, revision]);
+  const visible = data.filter(g=>showUntested || g.test_cases > 0);
+  const selected = visible.find(g=>g.code === selectedCode) ?? visible[0];
+  const historyScope = selected ? {...filters, ...(dimension === "categories" ? {category:selected.code} : selected.code !== "unassigned" ? {document_type_id:selected.code} : {})} : filters;
+  return <div className="page-stack">
+    <PageHeader title="วิเคราะห์ประสิทธิภาพ" description="ดูว่า Pipeline ใดเหมาะกับเอกสารหรือข้อมูลแต่ละประเภท"
+      actions={<button className="button secondary" disabled={loading} onClick={()=>{setLoading(true);setRevision(n=>n+1);}}><RefreshCw size={16}/>รีเฟรช</button>} />
+    <div className="flex gap-2 flex-wrap" role="group" aria-label="มิติการวิเคราะห์">
+      {([ ["document-types", "ตามประเภทเอกสาร"], ["categories", "ตามประเภทข้อมูล"] ] as const).map(([key,label])=>
+        <button key={key} aria-pressed={dimension===key} className={`button ${dimension===key ? "primary" : "secondary"}`} onClick={()=>{setLoading(true);setDimension(key);setSelectedCode("");}}>{label}</button>)}
     </div>
-  );
+    <FilterBar count={Object.values(filters).filter(Boolean).length + Number(showUntested)} onClear={()=>{setFilters({});setShowUntested(false);}}>
+      <AnalyticsFilters value={filters} categories={categories} pipelines={pipelines} onChange={(key,value)=>{setLoading(true);setFilters(old=>({...old,[key]:value||undefined}));}} />
+      <label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={showUntested} onChange={e=>setShowUntested(e.target.checked)}/>แสดงประเภทที่ยังไม่ทดสอบ</label>
+    </FilterBar>
+    <p className="filter-note">ประเภทเอกสารคือประเภททางธุรกิจ · ประเภทข้อมูลคือ tag เนื้อหา · วันที่กรองคือวันที่สร้างชุดทดสอบ · ตัวกรองร่วมกับประวัติและเปรียบเทียบ</p>
+    {invalid && <p className="error-banner" role="alert">วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น</p>}
+    {error && <div className="error-banner" role="alert">โหลดข้อมูลวิเคราะห์ไม่ได้: {error}<button className="button small" onClick={()=>{setLoading(true);setRevision(n=>n+1);}}>ลองใหม่</button></div>}
+    {loading && !invalid ? <LoadingState label="กำลังโหลดข้อมูลวิเคราะห์…"/> : !invalid && !error && <>
+      {summary && <div className="stat-grid">
+        <Stat label="เอกสารที่วิเคราะห์ได้" value={`${summary.evaluated_cases} / ${summary.test_cases}`} note="จำนวนชุดทดสอบไม่ซ้ำที่มี GT ยืนยันในขอบเขตนี้"/>
+        <Stat label="ผล Pipeline ที่มี GT" value={summary.evaluated_results} note={`${summary.evaluated_pipelines} Pipelines · รวมผลเก็บถาวร`}/>
+        <Stat label="ประเภทที่มีข้อมูลพอเปรียบเทียบ" value={data.filter(g=>g.best_pipeline).length} note="แต่ละ Pipeline ต้องมี ≥5 ชุดทดสอบที่ประเมินได้ในประเภทนั้น"/>
+        <Stat label="Pipeline ดีที่สุดในประเภทที่เลือก" value={selected?.best_pipeline?.pipeline_name || "ยังมีข้อมูลไม่พอสำหรับเปรียบเทียบ"}
+          note={selected?.best_pipeline ? `${selected.display_name} · CER ${percent(selected.best_pipeline.cer)} · n=${selected.best_pipeline.evaluated_runs}${selected.best_pipeline.retired ? " · เก็บถาวร" : ""}` : "ต้องมีอย่างน้อย 5 ชุดทดสอบต่อ Pipeline เพื่อจัดอันดับ"}/>
+      </div>}
+      {selected ? <section className="panel">
+        <div className="panel-header"><h2>ประสิทธิภาพแยกตามประเภท</h2>
+          <label className="field">ประเภทที่แสดงในตาราง<select aria-label="ประเภทที่แสดงในตาราง" className="select" value={selected.code} onChange={e=>setSelectedCode(e.target.value)}>
+            {visible.map(g=><option key={g.code} value={g.code}>{g.display_name} · {g.evaluated_cases}/{g.test_cases} ชุด</option>)}
+          </select></label>
+        </div>
+        {!selected.best_pipeline && <p className="notice-banner">ประเภท “{selected.display_name}” มี {selected.evaluated_cases} ชุดที่ประเมินได้ · ต้องมี ≥5 ชุดต่อ Pipeline เพื่อจัดอันดับ · ยังมีข้อมูลไม่พอสำหรับเปรียบเทียบ</p>}
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="ประสิทธิภาพรายประเภท เลื่อนแนวนอนเพื่อดูเพิ่มเติม">
+          <table className="data-table min-w-[650px]"><thead><tr><th>Pipeline</th><th>CER เฉลี่ย ↓</th><th>เวลาเฉลี่ย ↓</th><th>n ที่มี GT</th><th>ผลสำเร็จ</th></tr></thead>
+            <tbody>{selected.pipelines.filter(p=>p.tests>0).map(p=><tr key={p.pipeline_id}>
+              <td>{p.pipeline_name}{p.retired && <span className="badge neutral">เก็บถาวร</span>}</td>
+              <td>{percent(p.cer)}</td><td>{p.avg_time_ms == null ? "—" : `${(p.avg_time_ms / 1000).toFixed(1)} วินาที`}</td>
+              <td>{p.evaluated_runs}{p.evaluated_runs < 5 && <span className="row-meta">ยังไม่จัดอันดับ</span>}</td><td>{p.successful_runs}/{p.tests}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        {selected.code !== "unassigned" && <div className="panel-header"><Link className="button secondary" href={analyticsHref("/history",historyScope)}>ดูประวัติของประเภทนี้</Link></div>}
+      </section> : <section className="panel"><EmptyState title="ยังไม่มีชุดทดสอบในประเภทที่เลือก" description="ลองเปลี่ยนตัวกรอง หรือระบุประเภทเอกสารและประเภทข้อมูลให้ชุดทดสอบ"/></section>}
+      <p className="filter-note">ค่า CER ใช้ผลรันสุดท้ายที่ GT ยืนยัน · แต่ละชุดนับครั้งเดียวต่อ Pipeline · ชุดหนึ่งติด tag ได้หลายประเภท จึงไม่บวกจำนวนของแต่ละประเภทเป็นยอดรวม · Global workflow ใช้ผลรวมเวลา Field</p>
+    </>}
+  </div>;
 }

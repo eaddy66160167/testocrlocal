@@ -54,7 +54,7 @@ export const createTestCase = (input: TestCaseInput) => request<TestCase>("/test
 export const getTestCase = (id: string) => request<TestCase>(`/test-cases/${id}`);
 export const deleteTestCase = (id: string) => request<void>(`/test-cases/${id}`, { method: "DELETE" });
 
-export type AppLog = { id: string; created_at: string; level: string; event_type: string; message: string; page_number: number | null; pipeline_id: string | null; request_id: string | null; gateway_request_id: string | null; metadata: { error_code?: string; duration_ms?: number } };
+export type AppLog = { id: string; created_at: string; level: string; event_type: string; message: string; page_number: number | null; pipeline_id: string | null; pipeline_name: string | null; document_name: string | null; document_id: string | null; test_case_id: string | null; test_case_exists: boolean; outcome: string; request_id: string | null; gateway_request_id: string | null; metadata: { error_code?: string; duration_ms?: number; count?: number } };
 export const getLogs = (params: URLSearchParams) => request<{ total: number; items: AppLog[] }>(`/logs?${params}`);
 export type PageProgress = { event: string; page?: number; pages?: number[]; status?: string; test_case_id?: string; message?: string };
 export async function runPages(id: string, pages: number[], pipelines: string[], category_codes: string[], onEvent: (event: PageProgress) => void) {
@@ -80,6 +80,9 @@ export const checkField = (caseId: string, runId: string, fieldId: string, groun
 export const saveFieldGT = (caseId: string, runId: string, fieldId: string, ground_truth_raw: string, confirmed: boolean) => request<import("@/types").OCRField>(`/test-cases/${caseId}/runs/${runId}/fields/${fieldId}/ground-truth`, { method: "PUT", body: JSON.stringify({ ground_truth_raw, confirmed }) });
 export const getHistory = (filters?: QueryFilters) => request<TestCase[]>(`/history${query(filters)}`);
 export const getMatrix = (filters?: QueryFilters) => request<MatrixRow[]>(`/matrix${query(filters)}`);
+export const getAnalyticsSummary = (filters?: QueryFilters) => request<import("@/types").AnalyticsSummary>(`/analytics/summary${query(filters)}`);
+export const getAnalyticsPipelines = () => request<import("@/types").AnalyticsPipeline[]>("/analytics/pipelines");
+export const getAnalysisGroups = (dimension: "document-types" | "categories", filters?: QueryFilters) => request<import("@/types").AnalyticsGroup[]>(`/analytics/${dimension}${query(filters)}`);
 export const getCategoryAnalytics = (filters?: QueryFilters) => request<CategoryAnalytics[]>(`/analytics/categories${query(filters)}`);
 export type ErrorGroup = { pipeline_id: string; error_type: string; ground_truth_unit: string | null; ocr_unit: string | null; count: number; test_case_count: number; cases: { id: string; document_id: string; filename: string; page_number: number | null; categories: string[] }[] };
 export const getErrorAnalysis = (params: URLSearchParams) => request<{ total: number; items: ErrorGroup[] }>(`/analytics/errors?${params}`);

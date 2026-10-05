@@ -34,7 +34,7 @@ export default function MatrixTable({ rows }: { rows: MatrixRow[] }) {
               <td>
                 <div className="flex items-center gap-3">
                   <span className={`h-8 w-1 rounded-full ${["bg-indigo-500", "bg-teal-500", "bg-violet-500"][index % 3]}`} />
-                  <div><span className="font-semibold text-slate-800">{pipelineLabel(row.pipeline_id, row.pipeline_name)}</span><span className="block pt-1 text-[11px] text-slate-400">{row.pipeline_id}</span></div>
+                  <div><span className="font-semibold text-slate-800">{pipelineLabel(row.pipeline_id, row.pipeline_name)}</span>{row.retired && <span className="badge neutral">เก็บถาวร</span>}<span className="block pt-1 text-[11px] text-slate-400">{row.pipeline_id}</span></div>
                 </div>
               </td>
               <td className="tabular-nums">{row.tests}</td>

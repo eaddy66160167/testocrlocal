@@ -37,6 +37,21 @@ def category_analytics(session: SessionDep, filters: Annotated[BenchmarkFilters,
     return MatrixService(session).categories(filters)
 
 
+@router.get("/analytics/summary")
+def analytics_summary(session: SessionDep, filters: Annotated[BenchmarkFilters, Depends()]):
+    return MatrixService(session).summary(filters)
+
+
+@router.get("/analytics/pipelines")
+def analytics_pipelines(session: SessionDep):
+    return MatrixService(session).options()
+
+
+@router.get("/analytics/document-types")
+def document_type_analytics(session: SessionDep, filters: Annotated[BenchmarkFilters, Depends()]):
+    return MatrixService(session).groups(filters, "document_type")
+
+
 @router.get("/analytics/errors")
 def error_analytics(session: SessionDep, filters: Annotated[ErrorFilters, Depends()],
                     limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0)):

@@ -3,13 +3,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Plus } from "lucide-react";
-import { getHistory, getCategories, getPipelines } from "@/lib/api";
+import { getHistory, getCategories, getAnalyticsPipelines } from "@/lib/api";
+import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
 import { categoryLabel, t, userError, pipelineLabel } from "@/lib/i18n/th";
-import type { TestCase, Category, PipelineConfig, QueryFilters } from "@/types";
+import type { TestCase, Category, AnalyticsPipeline, QueryFilters } from "@/types";
 import {
   PageHeader,
   FilterBar,
-  DatasetFilters,
   CaseStatus,
   caseState,
   LoadingState,
@@ -21,9 +22,9 @@ export default function HistoryPage() {
   const router = useRouter();
   const [cases, setCases] = useState<TestCase[]>([]),
     [categories, setCategories] = useState<Category[]>([]),
-    [pipelines, setPipelines] = useState<PipelineConfig[]>([]);
-  const [filters, setFilters] = useState<QueryFilters>({}),
-    [search, setSearch] = useState(""),
+    [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
+  const [filters, setFilters] = useAnalyticsFilters();
+  const [search, setSearch] = useState(""),
     [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
@@ -36,17 +37,6 @@ export default function HistoryPage() {
     filters.date_from > filters.date_to
   );
   useEffect(() => {
-    async function restoreFilters() {
-      const q = new URLSearchParams(window.location.search);
-      if (q.get("category") || q.get("document"))
-        setFilters({
-          category: q.get("category") || undefined,
-          document: q.get("document") || undefined,
-        });
-    }
-    void restoreFilters();
-  }, []);
-  useEffect(() => {
     let active = true;
     async function load() {
       setLoading(true);
@@ -58,7 +48,7 @@ export default function HistoryPage() {
       await Promise.all([
         getHistory({ ...filters, limit: 21, offset }),
         getCategories(),
-        getPipelines(),
+        getAnalyticsPipelines(),
       ])
         .then(([h, c, p]) => {
           if (active) {
@@ -100,6 +90,7 @@ export default function HistoryPage() {
         description="ค้นหาเอกสาร เปิดผลล่าสุด และจัดการชุดทดสอบที่บันทึกไว้"
         actions={
           <>
+            <Link className="button secondary" href={analyticsHref("/matrix", filters)}>เปรียบเทียบผล</Link>
             <button
               className="button secondary"
               aria-label={t("Refresh history")}
@@ -129,7 +120,7 @@ export default function HistoryPage() {
         }}
       >
         <label className="field filter-search">
-          ค้นหาในรายการหน้านี้
+          ค้นหาในหน้านี้
           <input
             className="input"
             placeholder="ชื่อเอกสาร"
@@ -137,7 +128,7 @@ export default function HistoryPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <DatasetFilters
+        <AnalyticsFilters
           value={filters}
           categories={categories}
           pipelines={pipelines}
@@ -201,7 +192,7 @@ export default function HistoryPage() {
                   <tr>
                     {[
                       "เอกสาร / หน้า",
-                      "วันที่",
+                      "วันที่สร้างชุดทดสอบ (UTC)",
                       "ประเภทข้อมูล",
                       "สถานะ",
                       "ผลล่าสุดตาม Pipeline",
@@ -243,7 +234,7 @@ export default function HistoryPage() {
                       </td>
                       <td>
                         <time dateTime={c.created_at}>
-                          {new Date(c.created_at).toLocaleDateString("th-TH")}
+                          {new Date(c.created_at).toLocaleDateString("th-TH", {timeZone:"UTC"})}
                         </time>
                       </td>
                       <td>
@@ -261,7 +252,7 @@ export default function HistoryPage() {
                         <CaseStatus record={c} />
                       </td>
                       <td>
-                        {pipelines.map((p) => {
+                        {pipelines.filter(p => c.runs.some(r => r.pipeline_id === p.pipeline_id)).map((p) => {
                           const r = [...c.runs]
                             .reverse()
                             .find((r) => r.pipeline_id === p.pipeline_id);
@@ -271,7 +262,7 @@ export default function HistoryPage() {
                               className="flex justify-between gap-5"
                             >
                               <span>
-                                {pipelineLabel(p.pipeline_id, p.name)}
+                                {pipelineLabel(p.pipeline_id, p.pipeline_name)}{p.retired && <span className="badge neutral">เก็บถาวร</span>}
                               </span>
                               <span>
                                 {!r ? (

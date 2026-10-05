@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAnalyticsNavigation } from "@/lib/analytics-scope";
 import {
   BarChart3,
   BookOpen,
@@ -23,6 +24,7 @@ const links = [
 ];
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const scopedHref = useAnalyticsNavigation();
   const [open, setOpen] = useState(false);
   const detail = pathname.startsWith("/test/");
   const workflow = pathname.startsWith("/workflow/");
@@ -59,7 +61,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             return (
               <Link
                 key={href}
-                href={href}
+                href={scopedHref(href, pathname)}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
                 className={`nav-link ${active ? "active" : ""}`}

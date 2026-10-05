@@ -17,7 +17,9 @@ Only the backend talks to the Gateway and database. Originals and PDFs belong in
 
 Global Fields have stable UUIDs and original-source coordinates. The backend creates one canonical lossless PNG per field. Every selected pipeline receives that same application crop. Layout is locked after OCR; create a new case to change it. PDF pages retain separate cases and layouts.
 
-## Six pipelines
+## Dynamic pipelines and historical results
+
+Current executable pipelines are configured through the OCR model registry and Dynamic Pipeline Settings (integrated, DET → REC, or REC-only). Migration `0010_dynamic_pipelines` introduced this registry. Names below describe historical adapters/contracts, not six automatically active configurations. Historical PipelineRun snapshots remain analyzable after a configuration is removed, with the label **เก็บถาวร**; analytics never recreate executable configs.
 
 | Pipeline | Gateway contract |
 | --- | --- |
@@ -49,6 +51,12 @@ dataset/
 Document Types include protected defaults and custom types. Names are trimmed, normalized and case-insensitively unique. Removing a custom type archives it for future selection; historical documents retain its name. Untyped old records remain valid. The existing image/PDF `document_type` field is unchanged; business types use a separate reference.
 
 System Logs search supports partial, case-insensitive Thai/English words across filename, pipeline, event, message and status. Multiple words are combined with AND; exact operational filters remain available through the API.
+
+History, Comparison and Analysis share URL filters `document_type_id` (business type), `category` (content tag), `pipeline`, `date_from`, and `date_to`. Date ranges filter **TestCase creation date**, not evaluation date. Dataset and Logs have independent scope. Page-local filename/status controls are explicitly labeled.
+
+Comparison uses a backend summary across the entire filter scope: unique cases, evaluated latest run-level results, coverage of unique evaluated cases, individual lowest final CER with provenance/ties, and fastest mean processing time with at least five measured successful latest runs. Global workflow processing time is the sum of Field durations, not page wall-clock. Analysis defaults to business document types; content tags are a separate view. Ranking requires five distinct eligible evaluated cases per Pipeline/group. Confirmed non-empty Sub-field subsets remain eligible under the existing evaluation rules.
+
+Logs show human messages, severity, document/Pipeline and outcome first; IDs are expandable technical details. Links to deleted cases are replaced with an explicit unavailable indication. Operational retention of **90 days** is recommended; no automatic deletion job is implemented. Potential future uses include error counts, latency/failure alerts, top causes, KPI provenance checks and incident export.
 
 ## Local development (Windows PowerShell)
 
@@ -100,7 +108,7 @@ Playwright needs the test backend/frontend running with local PostgreSQL. `scrip
 
 ## Deployment
 
-Normal push to `main` triggers the existing Railway/Vercel integrations. Apply and verify required additive database migrations before new backend code serves traffic. Current head is `0009_document_types_dataset` (file `0009_document_types_dataset_management.py`). Next standalone output is used locally/Docker and disabled on Vercel. Preserve the persistent uploads volume.
+Normal push to `main` triggers the existing Railway/Vercel integrations. Apply and verify required additive database migrations before new backend code serves traffic. Current head is `0010_dynamic_pipelines`. This analytics/UI change requires no new migration or environment variable. Next standalone output is used locally/Docker and disabled on Vercel. Preserve the persistent uploads volume.
 
 Frontend: https://ocrtest-sandy.vercel.app
 
@@ -114,5 +122,7 @@ Backend health: https://ocrtest-production-095b.up.railway.app/api/health
 - [Global layout and evaluation](docs/global-layout.md)
 - [Benchmark contract](docs/benchmark-pipeline.md)
 - [Thai FT v2 contract](docs/thai-ft-v2.md)
+- [Stage A analytics audit](docs/ux-kpi-log-audit.md)
+- [Stage B acceptance and regression evidence](docs/stage-b-validation.md)
 
 Gateway readiness may not describe individual variants; unknown readiness does not prevent a normal request. Missing historical files require restoration or re-upload. Auto Layout drafts are page/session-local until saved. The app has no user-authentication layer; deployment access belongs to the operator's network/platform controls.

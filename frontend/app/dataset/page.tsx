@@ -91,7 +91,7 @@ export default function DatasetPage() {
     <div className="page-stack">
       <PageHeader
         title="Dataset Builder"
-        description="ตัวอย่างที่ยืนยัน Ground Truth แล้ว · เรียงล่าสุดก่อน"
+        description="เตรียมข้อมูลสำหรับ train จากภาพต้นฉบับและ Ground Truth ที่ยืนยันแล้ว · เรียงล่าสุดก่อน"
         actions={
           <button
             className="button primary"
@@ -180,7 +180,7 @@ export default function DatasetPage() {
         (data.items.length ? (
           <section className="panel">
             <div className="panel-header">
-              <h2>{data.total} ตัวอย่างที่พร้อมส่งออก</h2>
+              <h2>{data.total} ตัวอย่างที่ยืนยัน GT · ส่งออกได้เมื่อมีไฟล์ต้นฉบับ</h2>
               <button
                 className="button small"
                 disabled={exporting}
