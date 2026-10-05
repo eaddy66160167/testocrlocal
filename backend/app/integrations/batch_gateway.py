@@ -63,8 +63,11 @@ class BatchGateway:
                 data["count"] = len(collected[index])
                 if isinstance(data.get("result"), dict):
                     data["result"]["results"] = collected[index]
-                else:
-                    data["results"] = collected[index]
+                # Leaf adapters expose aliases of the same result list. REC reads
+                # the top-level alias; leaving it unsliced breaks multi-image calls.
+                data["results"] = collected[index]
+                if "predictions" in data:
+                    data["predictions"] = collected[index]
                 response["meta"]["duration_ms"] = duration / len(entries) if duration_known else None
                 response["meta"]["combined_input_count"] = len(flat)
                 response["meta"]["batch_request_ids"] = request_ids[index]

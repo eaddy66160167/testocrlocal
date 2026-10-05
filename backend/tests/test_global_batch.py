@@ -6,7 +6,8 @@ from tests.test_global_layout import layout
 
 
 @pytest.mark.parametrize("mode", ["det_rec", "rec"])
-def test_global_crops_are_batched_and_results_keep_field_identity(client, document, gateway, mode):
+@pytest.mark.parametrize("contract", ["legacy", "leaf_aliases"])
+def test_global_crops_are_batched_and_results_keep_field_identity(client, document, gateway, mode, contract):
     case, fields = layout(client, document, count=3)
     models = client.get("/api/pipelines/models").json()
     selected = {kind: next(m["id"] for m in models if m["kind"] == kind and m["source"] == "custom" and m["version"] == "5" and m["weight"] == "baseline") for kind in ("det", "rec")}
@@ -21,6 +22,11 @@ def test_global_crops_are_batched_and_results_keep_field_identity(client, docume
             data = {"contract_version": "leaf-inference-v1", "kind": "text_detection_batch", "count": count, "result": {"results": [{"dt_polys": [[[2, 3], [50, 3], [50, 30], [2, 30]]], "dt_scores": [.95]} for _ in range(count)]}}
         else:
             data = {"count": count, "results": [{"text": f"field-{i}", "confidence": .9} for i in range(count)]}
+        if contract == "leaf_aliases":
+            detection = "detection" in request.url.path
+            items = data["result"]["results"] if detection else [{"rec_text": f"field-{i}", "rec_score": .9} for i in range(count)]
+            data = {"contract_version": "leaf-inference-v1", "kind": "text_detection_batch" if detection else "text_recognition_batch", "count": count,
+                    "result": {"results": items}, "results": items, "predictions": items, "raw_output": items}
         return httpx.Response(200, json={"data": data, "meta": {"duration_ms": 90}})
 
     gateway[0]["handler"] = upstream
@@ -31,6 +37,17 @@ def test_global_crops_are_batched_and_results_keep_field_identity(client, docume
     assert sizes == ([3, 3] if mode == "det_rec" else [3])
     assert [f["global_field_id"] for f in result["fields"]] == [f["id"] for f in fields]
     assert [f["ocr_text"] for f in result["fields"]] == ["field-0", "field-1", "field-2"]
+    root = f"/api/test-cases/{case['id']}"
+    for i, field in enumerate(fields):
+        saved = client.put(root + f"/global-fields/{field['id']}/ground-truth", json={"ground_truth_raw": f"field-{i}"})
+        assert saved.status_code == 200, saved.text
+    saved = client.put(root + "/ground-truth", json={"ground_truth_raw": "field-0\nfield-1\nfield-2"})
+    assert saved.status_code == 200, saved.text
+    evaluated = client.post(root + "/evaluate", json={"mode": "auto", "global_field_ids": [f["id"] for f in fields], "require_complete_gt": True})
+    assert evaluated.status_code == 200, evaluated.text
+    evaluated_run = evaluated.json()["runs"][0]
+    assert evaluated_run["document_evaluation"]["exact_match"]
+    assert all(field["evaluation"]["exact_match"] for field in evaluated_run["fields"])
     if mode == "det_rec":
         for field, prediction in zip(fields, result["fields"]):
             assert prediction["diagnostics"]["boxes"][0]["bbox"][0] == field["roi"]["x1"] + 2
