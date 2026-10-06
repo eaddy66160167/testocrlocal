@@ -8,7 +8,6 @@ import {
   BookOpen,
   FlaskConical,
   History,
-  Layers3,
   Menu,
   ScanLine,
   Settings2,
@@ -18,7 +17,6 @@ const links = [
   { href: "/", label: "ทดสอบ OCR", icon: FlaskConical },
   { href: "/history", label: "ประวัติ", icon: History },
   { href: "/matrix", label: "เปรียบเทียบ", icon: BarChart3 },
-  { href: "/analytics/categories", label: "วิเคราะห์", icon: Layers3 },
   { href: "/dataset", label: "Dataset", icon: BookOpen },
 ];
 export default function AppShell({ children }: { children: React.ReactNode }) {

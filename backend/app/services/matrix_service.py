@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.db.models import DocumentType, PipelineRun
 from app.repositories.benchmark_repository import BenchmarkRepository
+from app.services import comparison_engine as comparison
 from app.services.metrics_service import normalize_text
 
 
@@ -50,7 +51,7 @@ class MatrixService:
                 if not self.eligible(run) or (pipeline and run.pipeline_id != pipeline):
                     continue
                 old = latest.get(run.pipeline_id)
-                if old is None or (run.created_at, run.id) > (old.created_at, old.id):
+                if old is None or (timestamp(run.created_at), run.id) > (timestamp(old.created_at), old.id):
                     latest[run.pipeline_id] = run
             pairs.extend((case, run) for run in latest.values())
         return pairs
@@ -89,7 +90,7 @@ class MatrixService:
     def identities(self, cases):
         identities = {c.pipeline_id: dict(pipeline_id=c.pipeline_id, pipeline_name=c.name, retired=False)
                       for c in self.configs()}
-        for _, run in sorted(self.latest(cases), key=lambda p: (p[1].created_at, p[1].id), reverse=True):
+        for _, run in sorted(self.latest(cases), key=lambda p: (timestamp(p[1].created_at), p[1].id), reverse=True):
             identities.setdefault(run.pipeline_id, dict(
                 pipeline_id=run.pipeline_id, pipeline_name=run.pipeline_name, retired=True,
             ))
@@ -195,3 +196,61 @@ class MatrixService:
 
     def categories(self, filters):
         return self.groups(filters, "category")
+
+    def decision(self, filters, include_archived=False):
+        """Preload once, reuse eligibility, then compute entirely in memory."""
+        from time import perf_counter
+
+        start = perf_counter()
+        cases = self.repository.cases(filters, analytics=True)
+        enabled = {c.pipeline_id for c in self.configs() if c.enabled}
+        identities = [dict(**i, active=i["pipeline_id"] in enabled)
+                      for i in self.identities(cases)
+                      if not filters.pipeline or i["pipeline_id"] == filters.pipeline]
+        records = {}
+        for case in cases:
+            if case.workflow != "global":
+                confirmed = case.status == "confirmed" and bool(normalize_text(case.ground_truth_raw or ""))
+            elif case.evaluation_mode == "whole_document":
+                confirmed = bool(case.document_gt_confirmed_at and normalize_text(case.ground_truth_raw or ""))
+            else:
+                confirmed = any(f.confirmed_at and normalize_text(f.ground_truth_raw or "")
+                                for f in case.global_fields)
+            records[case.id] = dict(id=case.id, document_id=case.document_id,
+                                   filename=case.document.filename,
+                                   type_id=case.document.document_type_id,
+                                   confirmed_gt=bool(confirmed), runs={}, points={})
+        latest = self.latest(cases, filters.pipeline)
+        for case, run in latest:
+            record = records[case.id]
+            record["runs"][run.pipeline_id] = run.status
+            if (evaluation := self.evaluation(case, run)):
+                record["confirmed_gt"] = True
+                record["points"][run.pipeline_id] = dict(cer=evaluation[0].cer, time_ms=run.processing_time_ms)
+        data = list(records.values())
+        overall = comparison.decide(data, identities, include_archived)
+        groups = []
+        referenced_types = {r["type_id"] for r in data if r["type_id"]}
+        types = {t.id: t for t in self.repository.session.scalars(
+            select(DocumentType).where(DocumentType.id.in_(referenced_types))
+        )}
+        for type_id in [*sorted(types, key=lambda key: (types[key].name, key)), None]:
+            selected = [r for r in data if r["type_id"] == type_id]
+            if not selected:
+                continue
+            decision = overall if len(selected) == len(data) else comparison.decide(selected, identities, include_archived)
+            groups.append(dict(code=type_id or "unassigned", name=types[type_id].name if type_id else "ไม่ระบุประเภท",
+                               archived=not types[type_id].active if type_id else False,
+                               documents=len({r["document_id"] for r in selected}),
+                               eligible_documents=len({r["document_id"] for r in selected if r["points"]}),
+                               decision=decision))
+        active = [i for i in identities if i["active"]]
+        result = dict(scope=filters.model_dump(mode="json"), include_archived=include_archived,
+                      pipelines=identities if include_archived else active, overall=overall,
+                      by_type=[dict(code="all", name="ทุกประเภท", archived=False,
+                                    documents=overall["documents"], decision=overall), *groups],
+                      actions=comparison.actions(data, active, groups), latest_results=len(latest),
+                      minimum_documents=comparison.MIN_PAIR_DOCS, tie_pp=comparison.PAIR_TIE_PP,
+                      bootstrap_samples=comparison.BOOTSTRAP_SAMPLES, statistical_unit="document")
+        result["computation_ms"] = (perf_counter() - start) * 1000
+        return result

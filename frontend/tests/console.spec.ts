@@ -120,11 +120,12 @@ test("business library filters, detail tabs, missing metrics and history links",
     .click();
   await expect(page.getByText("SAME INPUT", { exact: true })).toBeVisible();
   await page.goto("/analytics/categories");
+  await page.getByRole("button", { name: "ตัวกรองเอกสารและวันที่", exact: true }).click();
   await page.getByLabel("ประเภทเอกสาร (ธุรกิจ)").selectOption(documentTypeId);
   await expect(
-    page.getByRole("columnheader", { name: "n ที่มี GT" }),
+    page.getByRole("table", { name: "เปรียบเทียบตามประเภทเอกสาร", exact: true }),
   ).toBeVisible();
-  await page.locator(`main a[href="/history?document_type_id=${documentTypeId}"]`).click();
+  await page.locator('#console-navigation a[href^="/history"]').click();
   await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveValue(documentTypeId);
   const original = await (
     await request.get(`${api}/api/test-cases/${caseId}`)
@@ -163,8 +164,8 @@ test("all data routes have recoverable errors and intentional empty states", asy
     ["/matrix", "history", "ยังไม่มีผลสำหรับเปรียบเทียบ", []],
     [
       "/analytics/categories",
-      "analytics/document-types",
-      "ยังไม่มีชุดทดสอบในประเภทที่เลือก",
+      "history",
+      "ยังไม่มีผลสำหรับเปรียบเทียบ",
       [],
     ],
     ["/logs", "logs", "ยังไม่มีบันทึกระบบ", { total: 0, items: [] }],
@@ -235,7 +236,7 @@ test("local loading keeps navigation available and mobile sidebar reaches every 
   for (const [route, endpoint] of [
     ["/history", "history"],
     ["/matrix", "matrix"],
-    ["/analytics/categories", "analytics/document-types"],
+    ["/analytics/categories", "history"],
     ["/logs", "logs"],
     ["/settings/pipelines", "pipelines"],
     [`/test/${caseId}`, `test-cases/${caseId}`],
@@ -265,7 +266,6 @@ test("local loading keeps navigation available and mobile sidebar reaches every 
     "/",
     "/history",
     "/matrix",
-    "/analytics/categories",
     "/settings/pipelines",
   ]) {
     await page.locator('[aria-controls="console-navigation"]').click();

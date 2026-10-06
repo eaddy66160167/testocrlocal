@@ -54,3 +54,18 @@ export function useAnalyticsNavigation() {
   return (path: string, current: string) => paths.includes(path) && paths.includes(current)
     ? analyticsHref(path, read(search)) : path;
 }
+
+export function useComparisonDisplay() {
+  const search = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const params = new URLSearchParams(search);
+  return {
+    view: params.get("view") === "by-type" ? "by-type" : "overall",
+    includeArchived: params.get("include_archived") === "1",
+    update: (key: "view" | "include_archived", value: string) => {
+      const next = new URLSearchParams(window.location.search);
+      if (value) next.set(key, value); else next.delete(key);
+      window.history.replaceState(null, "", `${window.location.pathname}?${next}`);
+      window.dispatchEvent(new Event("analytics-scope"));
+    },
+  };
+}

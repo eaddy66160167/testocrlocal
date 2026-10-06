@@ -2,18 +2,18 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getMatrix, getAnalyticsPipelines, getAnalyticsSummary, getHistory } from "@/lib/api";
-import { useAnalyticsFilters } from "@/lib/analytics-scope";
+import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison } from "@/lib/api";
+import { useAnalyticsFilters, useComparisonDisplay } from "@/lib/analytics-scope";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
-import AnalyticsKpis from "@/components/AnalyticsKpis";
+import {DecisionOverview, ByType} from "@/components/ComparisonDecision";
+import type {Comparison} from "@/types/comparison";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
-  MatrixRow,
   AnalyticsPipeline,
   AnalyticsSummary,
   TestCase,
 } from "@/types";
-import MatrixTable, { percent } from "@/components/MatrixTable";
+import { percent } from "@/components/MatrixTable";
 import {
   PageHeader,
   FilterBar,
@@ -21,11 +21,13 @@ import {
   EmptyState,
 } from "@/components/ConsoleUI";
 export default function MatrixPage() {
-  const [rows, setRows] = useState<MatrixRow[]>([]),
-    [cases, setCases] = useState<TestCase[]>([]),
+  const [cases, setCases] = useState<TestCase[]>([]),
     [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]),
     [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [filters, setFilters] = useAnalyticsFilters();
+  const display = useComparisonDisplay();
+  const [decision, setDecision] = useState<Comparison|null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
     [search, setSearch] = useState(""),
@@ -48,18 +50,18 @@ export default function MatrixPage() {
         return;
       }
       await Promise.all([
-        getMatrix(filters),
         getHistory({ ...filters, limit: 21, offset }),
         getAnalyticsPipelines(),
         getAnalyticsSummary(filters),
+        getComparison(filters, display.includeArchived),
       ])
-        .then(([r, h, p, s]) => {
+        .then(([h, p, s, d]) => {
           if (active) {
-            setRows(r);
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
             setPipelines(p);
             setSummary(s);
+            setDecision(d);
           }
         })
         .catch((e) => {
@@ -73,21 +75,21 @@ export default function MatrixPage() {
     return () => {
       active = false;
     };
-  }, [filters, offset, revision, invalid]);
+  }, [filters, offset, revision, invalid, display.includeArchived]);
   const visible = cases.filter(
     (c) =>
       (!onlyGT || c.ground_truth_raw !== null) &&
       (!search ||
         c.document.filename.toLowerCase().includes(search.toLowerCase())),
   );
-  const selected = pipelines.filter(
+  const selected = (decision?.pipelines ?? []).filter(
     (p) => !filters.pipeline || p.pipeline_id === filters.pipeline,
   );
   return (
     <div className="page-stack">
       <PageHeader
         title="เปรียบเทียบ Pipeline"
-        description="ดูผลแต่ละชุดทดสอบควบคู่กับค่าความแม่นยำและเวลาจากชุดข้อมูลเดียวกัน"
+        description="เลือก Pipeline ที่ควรใช้ จากผลบนเอกสารชุดเดียวกัน"
         actions={
           <button
             className="button secondary"
@@ -99,7 +101,10 @@ export default function MatrixPage() {
           </button>
         }
       />
-      <FilterBar
+      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>ภาพรวม</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>แยกตามประเภทเอกสาร</button></div>
+      <label className="flex gap-2 items-center"><input type="checkbox" checked={!display.includeArchived} onChange={e=>display.update("include_archived",e.target.checked ? "" : "1")}/>เฉพาะ Pipeline ที่ใช้งานอยู่</label>
+      <button className="button secondary self-start" aria-expanded={showFilters || Object.values(filters).some(Boolean)} onClick={()=>setShowFilters(v=>!v)}>ตัวกรองเอกสารและวันที่</button>
+      <div hidden={!showFilters && !Object.values(filters).some(Boolean)}><FilterBar
         count={
           Object.values(filters).filter(Boolean).length +
           Number(!!search) +
@@ -129,7 +134,7 @@ export default function MatrixPage() {
             placeholder="ชื่อเอกสาร"
           />
         </label>
-      </FilterBar>
+      </FilterBar></div>
       {invalid && (
         <p className="error-banner" role="alert">
           วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น
@@ -152,8 +157,8 @@ export default function MatrixPage() {
         !invalid &&
         !error && (
           <>
-            {summary && <AnalyticsKpis summary={summary} />}
-            <p className="filter-note">KPI และภาพรวมใช้ตัวกรองร่วมทั้งขอบเขต · Global workflow ใช้ผลรวมเวลา Field ไม่ใช่เวลารอทั้งหน้า · ค้นหาและ GT ด้านล่างมีผลเฉพาะหน้านี้</p>
+            {decision && (display.view === "overall" ? <DecisionOverview data={decision}/> : <ByType data={decision}/>)}
+            <p className="filter-note">คำแนะนำใช้เอกสารชุดเดียวกันแบบเทียบเป็นคู่ · ตารางด้านล่างเป็นผลรายชุดทดสอบ · ค้นหาและ GT มีผลเฉพาะหน้านี้</p>
             {cases.length ? (
               <section className="panel">
                 <div className="panel-header">
@@ -287,17 +292,6 @@ export default function MatrixPage() {
                     </Link>
                   }
                 />
-              </section>
-            )}
-            {rows.some((r) => r.tests > 0) && (
-              <section className="panel">
-                <div className="panel-header">
-                  <h2>ภาพรวมตามตัวกรองข้อมูล</h2>
-                  <span className="muted text-xs">
-                    ค่าจาก API · ไม่รวมตัวกรองเฉพาะหน้าตาราง
-                  </span>
-                </div>
-                <MatrixTable rows={rows} />
               </section>
             )}
             <p className="filter-note">

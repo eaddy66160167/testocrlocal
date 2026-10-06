@@ -112,3 +112,5 @@ export const archiveDocumentType = (id: string) => request<import("@/types").Doc
 export const excludeDatasetSample = (id: string, kind: "field" | "case") => request<{excluded: boolean}>(`/dataset/items/${id}?kind=${kind}`, {method:"DELETE"});
 
 export const updateDocumentType = (id: string, typeId: string, page?: number | null) => request<Document>(`/documents/${id}/type${page?`?page_number=${page}`:""}`, {method:"PUT",body:JSON.stringify({document_type_id:typeId||null})});
+
+export const getComparison = (filters: import("@/types").QueryFilters, includeArchived=false) => request<import("@/types/comparison").Comparison>(`/analytics/comparison?${new URLSearchParams({...Object.fromEntries(Object.entries(filters).filter(([,v])=>v!=null).map(([k,v])=>[k,String(v)])),include_archived:includeArchived?"1":"0"})}`);

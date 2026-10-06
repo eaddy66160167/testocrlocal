@@ -47,6 +47,12 @@ def analytics_pipelines(session: SessionDep):
     return MatrixService(session).options()
 
 
+@router.get("/analytics/comparison")
+def comparison_decision(session: SessionDep, filters: Annotated[BenchmarkFilters, Depends()],
+                        include_archived: bool = False):
+    return MatrixService(session).decision(filters, include_archived)
+
+
 @router.get("/analytics/document-types")
 def document_type_analytics(session: SessionDep, filters: Annotated[BenchmarkFilters, Depends()]):
     return MatrixService(session).groups(filters, "document_type")
