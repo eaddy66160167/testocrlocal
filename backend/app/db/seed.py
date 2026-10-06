@@ -26,7 +26,10 @@ CATEGORIES = {
 def seed_database(session, settings: Settings):
     # Stable IDs prevent re-creating edited catalog entries at the next startup.
     for source, kind, version, weight in [
-        ("official", "det", "6", "default"), ("official", "rec", "5", "default"),
+        *[("official", kind, version, "default") for kind in ("det", "rec")
+          for version in ("5", "6")],
+        *[("official", kind, version, weight) for kind in ("det", "rec")
+          for version in ("5", "6") for weight in ("baseline", "thai_ft_v1", "thai_ft_v2")],
         *[("custom", kind, version, weight) for kind in ("det", "rec")
           for version in ("5", "6") for weight in ("baseline", "thai_ft_v1", "thai_ft_v2")],
     ]:

@@ -40,7 +40,7 @@ export type TestCase = { history_status?: string;
 };
 export type PipelineConfig = {
   execution_mode?: "integrated" | "det_rec" | "rec" | null; source?: "custom" | "official" | null;
-  integrated_options?: {version: "5" | "6"; det_weight: string; rec_weight: string} | null;
+  integrated_options?: {version?: "5" | "6"; det_weight: string; rec_weight: string; paddle_model_defaults?: boolean; det_version?: "5" | "6" | null; rec_version?: "5" | "6" | null} | null;
   det_model_id?: string | null; rec_model_id?: string | null;
   det_model?: OCRModel | null; rec_model?: OCRModel | null;
   id: string; pipeline_id: string; name: string;
@@ -58,6 +58,7 @@ export type DynamicPipelineInput = {
   name: string; source: "custom" | "official"; execution_mode: "integrated" | "det_rec" | "rec";
   det_model_id: string | null; rec_model_id: string | null; enabled: boolean;
   version: "5" | "6"; det_weight: string; rec_weight: string;
+  paddle_model_defaults?: boolean; det_version?: "5" | "6" | null; rec_version?: "5" | "6" | null;
 };
 export type MatrixRow = {
   pipeline_id: string; pipeline_name: string; tests: number; successful_runs: number;

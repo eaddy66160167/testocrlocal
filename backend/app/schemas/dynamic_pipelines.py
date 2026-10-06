@@ -65,8 +65,11 @@ class DynamicPipelineInput(InputModel):
     det_model_id: UUID | None = None
     rec_model_id: UUID | None = None
     version: Literal["5", "6"] = "6"
-    det_weight: Literal["baseline", "thai_ft_v1", "thai_ft_v2"] = "baseline"
-    rec_weight: Literal["baseline", "thai_ft_v1", "thai_ft_v2"] = "baseline"
+    det_weight: str = Field(default="baseline", pattern=r"^[a-zA-Z0-9_.-]{1,100}$")
+    rec_weight: str = Field(default="baseline", pattern=r"^[a-zA-Z0-9_.-]{1,100}$")
+    paddle_model_defaults: bool = True
+    det_version: Literal["5", "6"] | None = None
+    rec_version: Literal["5", "6"] | None = None
     enabled: bool = True
 
     @field_validator("name")
@@ -78,6 +81,11 @@ class DynamicPipelineInput(InputModel):
 
     @model_validator(mode="after")
     def stages(self):
+        if self.source == "custom" and any(w not in {"baseline", "thai_ft_v1", "thai_ft_v2"} for w in (self.det_weight, self.rec_weight)):
+            raise ValueError("Unsupported custom weight")
+        if self.source == "official" and self.execution_mode == "integrated" and not self.paddle_model_defaults:
+            if self.det_version is None or self.rec_version is None:
+                raise ValueError("Select both DET and REC versions")
         if (self.execution_mode == "det_rec") != (self.det_model_id is not None):
             raise ValueError("Select a detection model only for DET + REC pipelines")
         if (self.execution_mode != "integrated") != (self.rec_model_id is not None):

@@ -79,7 +79,40 @@ class DynamicCustomAdapter(MintPipelineAdapter):
 
 
 class DynamicOfficialAdapter(HutchCropPipelineAdapter):
+    def __init__(self, config, settings):
+        super().__init__(config, settings)
+        options = dict(config.integrated_options or {})
+        if config.execution_mode in ("det_rec", "rec"):
+            options = {"paddle_model_defaults": False}
+            for kind in ("det", "rec"):
+                model = getattr(config, f"{kind}_model")
+                if model is not None:
+                    options[f"{kind}_version"] = model.version.removeprefix("v")
+                    options[f"{kind}_weight"] = "baseline" if model.weight == "default" else model.weight
+        self.options = options
+        if not options.get("paddle_model_defaults", True):
+            self.detector = f"Paddle DET V{options['det_version']} / {options['det_weight']}" if "det_version" in options else "Paddle DET (Gateway environment)"
+            self.recognizer = f"Paddle REC V{options['rec_version']} / {options['rec_weight']}" if "rec_version" in options else "Paddle REC (Gateway environment)"
+        else:
+            self.detector = "Paddle DET (Gateway environment)"
+            self.recognizer = "Paddle REC (Gateway environment)"
+
+    def query_params(self):
+        options = self.options
+        params = {"engine": "paddle"}
+        if not options.get("paddle_model_defaults", True):
+            for kind in ("det", "rec"):
+                if options.get(f"{kind}_version"):
+                    params[f"{kind}_version"] = options[f"{kind}_version"]
+                    params[f"{kind}_model"] = options[f"{kind}_weight"]
+        return params
+
     def build_request(self, crop, request_id):
         return self.gateway.build_request(png=crop.png, endpoint="/api/v1/ocr-results",
-            query_params={"engine": "paddle"}, fields=self.model_parameters(),
+            query_params=self.query_params(), fields=self.model_parameters(),
             request_id=request_id, request_format="multipart")
+
+    async def run(self, **kwargs):
+        result = await super().run(**kwargs)
+        result.raw_response["composition"] = self.query_params()
+        return result

@@ -20,10 +20,16 @@ function initial(p: PipelineConfig | undefined, models: OCRModel[]): DynamicPipe
     const weight = p.source === "official" ? "default" : (kind === "det" ? p.integrated_options?.det_weight : p.integrated_options?.rec_weight);
     return models.find(m => m.source === p.source && m.kind === kind && m.version === version && m.weight === weight)?.id || null;
   };
-  return { name: p?.name || "", source: p?.source || "custom", execution_mode: "det_rec",
-    det_model_id: selected("det"), rec_model_id: selected("rec"),
-    version: p?.integrated_options?.version || "6", det_weight: p?.integrated_options?.det_weight || "baseline",
-    rec_weight: p?.integrated_options?.rec_weight || "baseline", enabled: p?.enabled ?? true };
+  const officialIntegrated = p?.source === "official";
+  const det = p?.det_model || models.find(m => m.id === p?.det_model_id);
+  const rec = p?.rec_model || models.find(m => m.id === p?.rec_model_id);
+  const weight = (value?: string) => !value || value === "default" ? "baseline" : value;
+  return { name: p?.name || "", source: p?.source || "custom", execution_mode: officialIntegrated ? "integrated" : "det_rec",
+    det_model_id: officialIntegrated ? null : selected("det"), rec_model_id: officialIntegrated ? null : selected("rec"),
+    paddle_model_defaults: false,
+    det_version: p?.integrated_options?.det_version || (det?.version.replace(/^v/, "") as "5" | "6") || "6", rec_version: p?.integrated_options?.rec_version || (rec?.version.replace(/^v/, "") as "5" | "6") || "5",
+    version: p?.integrated_options?.version || "6", det_weight: p?.integrated_options?.det_weight || weight(det?.weight),
+    rec_weight: p?.integrated_options?.rec_weight || weight(rec?.weight), enabled: p?.enabled ?? true };
 }
 
 function ModelPicker({ title, models, value, onChange }: {
@@ -67,6 +73,15 @@ function PipelineEditor({ pipeline, models, onSaved, onCancel }: {
     catch (e) { setError(messageOf(e)); } finally { setBusy(false); }
   }
   const available = models.filter(m => m.source === form.source);
+  function officialWeights(kind: "det" | "rec") {
+    const weights = new Map(["baseline", "thai_ft_v1", "thai_ft_v2"].map(w => [w, w]));
+    for (const model of available.filter(m => m.kind === kind && m.version.replace(/^v/, "") === form[`${kind}_version`] && m.weight !== "default")) {
+      weights.set(model.weight, `${model.name} · ${model.weight}`);
+    }
+    const current = form[`${kind}_weight`];
+    if (current && !weights.has(current)) weights.set(current, current);
+    return [...weights];
+  }
   return <form onSubmit={submit} data-execution-mode={form.execution_mode} className="space-y-5 border-t border-slate-100 p-5 sm:p-6">
     <fieldset disabled={busy} className="space-y-5 min-w-0 [&_.field]:text-sm [&_.field]:text-slate-700 [&_.input]:bg-white [&_.select]:bg-white">
       <label className="flex flex-col gap-2"><span className="text-base font-semibold text-slate-900">ชื่อ Pipeline</span>
@@ -74,17 +89,37 @@ function PipelineEditor({ pipeline, models, onSaved, onCancel }: {
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="flex flex-col gap-2"><span className="text-base font-semibold text-slate-900">1. ประเภทโมเดล</span>
-          <select className="select" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value as DynamicPipelineInput["source"], det_model_id: null, rec_model_id: null }))}>
+          <select className="select" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value as DynamicPipelineInput["source"], execution_mode: e.target.value === "official" ? "integrated" : "det_rec", det_model_id: null, rec_model_id: null }))}>
             <option value="custom">Custom</option><option value="official">Official / Paddle</option>
           </select>
         </label>
       </div>
-      <div className="space-y-4">
+      {form.source === "official" && <p className="rounded-lg bg-sky-50 p-3 text-sm text-sky-900">เลือกเวอร์ชันและ weight ของ DET/REC แยกกันได้ ระบบส่งค่าทั้งหมดผ่าน PaddleOCR API เดียวด้วย engine=paddle</p>}
+      {form.source === "official" && form.execution_mode === "integrated" ? <div className="space-y-4">
+          {(["det", "rec"] as const).map(kind => <fieldset key={kind} className={`min-w-0 rounded-xl border p-5 space-y-4 ${kind === "det" ? "border-sky-200 bg-sky-50/50" : "border-violet-200 bg-violet-50/40"}`}>
+            <legend className="rounded-lg bg-white px-3 py-1 text-base font-semibold text-slate-900">{kind === "det" ? "2. Text Detection" : "3. Text Recognition"}</legend>
+            <p className="text-sm text-slate-600">{kind === "rec" ? "อ่านข้อความภายในกรอบที่ตรวจพบ" : "ค้นหาตำแหน่งและสร้างกรอบข้อความบนภาพ"}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="field">Model version<select className="select" required value={form[`${kind}_version`] || ""} onChange={e => setForm(f => ({...f, [`${kind}_version`]: e.target.value, [`${kind}_weight`]: "baseline"}))}>
+                <option value="">เลือกเวอร์ชัน</option>{["5", "6"].map(v => <option key={v} value={v}>{versionLabel(v, kind, "official")}</option>)}
+              </select></label>
+              <label className="field">Weight / โมเดล
+                <select className="select" required disabled={!form[`${kind}_version`]} value={form[`${kind}_weight`]} onChange={e => change(`${kind}_weight`, e.target.value)}>
+                  <option value="">เลือก weight</option>{officialWeights(kind).map(([weight, label]) => <option key={weight} value={weight}>{label}</option>)}
+                </select>
+              </label>
+            </div>
+          </fieldset>)}
+          <p className="text-sm text-slate-600">เลือก DET/REC ข้ามรุ่นได้ ชื่อ variant ต้องตรงกับ model_variants.json และมี weights อยู่บน Gateway</p>
+        <p className="break-all rounded-lg bg-slate-100 p-3 font-mono text-xs text-slate-700">
+          /api/v1/ocr-results?engine=paddle{`&det_version=${form.det_version}&rec_version=${form.rec_version}&det_model=${encodeURIComponent(form.det_weight)}&rec_model=${encodeURIComponent(form.rec_weight)}`}
+        </p>
+      </div> : <div className="space-y-4">
         <ModelPicker key={`det-${form.source}`} title="2. Text Detection" models={available.filter(m => m.kind === "det")} value={form.det_model_id} onChange={id => change("det_model_id", id)} />
         <ModelPicker key={`rec-${form.source}`} title="3. Text Recognition" models={available.filter(m => m.kind === "rec")} value={form.rec_model_id} onChange={id => change("rec_model_id", id)} />
-      </div>
-      <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-600">เปลี่ยนชื่อ Weight / โมเดลได้ใน “จัดการโมเดล OCR” ด้านล่าง → แก้ไข → ชื่อที่แสดง</p>
-      {pipeline && pipeline.execution_mode !== "det_rec" && <p className="text-xs text-slate-500">เมื่อบันทึก Pipeline นี้จะใช้โมเดล Det → Rec ที่เลือกด้านบน</p>}
+      </div>}
+      {form.execution_mode !== "integrated" && <p className="rounded-lg bg-slate-100 p-3 text-sm text-slate-600">เปลี่ยนชื่อ Weight / โมเดลได้ใน “จัดการโมเดล OCR” ด้านล่าง → แก้ไข → ชื่อที่แสดง</p>}
+      {pipeline && pipeline.execution_mode !== form.execution_mode && <p className="text-xs text-slate-500">การบันทึกจะเปลี่ยนวิธีเรียกโมเดลตามตัวเลือกด้านบนสำหรับการรันครั้งถัดไป</p>}
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.enabled} onChange={e => change("enabled", e.target.checked)} />เปิดใช้งานสำหรับทดสอบ OCR</label>
       {error && <p className="error-banner" role="alert">{error}</p>}
       <div className="flex justify-end gap-2">
@@ -107,7 +142,9 @@ function DynamicCard({ pipeline, models, onSaved }: { pipeline: PipelineConfig; 
     const model = kind === "det" ? pipeline.det_model : pipeline.rec_model;
     if (model) return `${model.name} / ${model.weight}`;
     if (pipeline.execution_mode === "integrated") {
-      if (pipeline.source === "official") return kind === "det" ? "PP-OCRv6_medium_det / default" : "th_PP-OCRv5_mobile_rec / default";
+      if (pipeline.source === "official") return opts?.paddle_model_defaults === false
+        ? `${versionLabel(opts[`${kind}_version`] || "—", kind, "official")} / ${opts[`${kind}_weight`]}`
+        : "ตามค่า env ของ Gateway";
       return `V${opts?.version || "—"} / ${kind === "det" ? opts?.det_weight || "—" : opts?.rec_weight || "—"}`;
     }
     return "ไม่ได้เลือกโมเดล";

@@ -57,6 +57,10 @@ class DynamicPipelineService:
         pipeline.enabled = data.enabled
         pipeline.det_model, pipeline.rec_model = det, rec
         pipeline.integrated_options = dict(version=data.version, det_weight=data.det_weight, rec_weight=data.rec_weight) if data.execution_mode == "integrated" else None
+        if data.source == "official" and data.execution_mode == "integrated":
+            pipeline.integrated_options = dict(paddle_model_defaults=data.paddle_model_defaults,
+                det_version=data.det_version, rec_version=data.rec_version,
+                det_weight=data.det_weight, rec_weight=data.rec_weight)
         pipeline.engine = "dynamic"
         pipeline.last_connection_status = None
         self.session.add(pipeline)

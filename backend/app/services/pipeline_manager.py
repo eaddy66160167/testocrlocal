@@ -27,12 +27,16 @@ class PipelineManager:
                     "rec": DynamicRecognitionAdapter,
                     "integrated": DynamicCustomAdapter if config.source == "custom" else DynamicOfficialAdapter,
                 }[config.execution_mode]
+                # Official model selection always runs inside Paddle's OCR API.
+                # Also cover saved definitions from the former separate-stage UI.
+                if config.source == "official":
+                    adapter_class = DynamicOfficialAdapter
             if adapter_class is None:
                 return PipelineRun(pipeline_id=config.pipeline_id, pipeline_name=config.name,
                                    status="error", error_code="ADAPTER_NOT_CONFIGURED",
                                    error_message="No adapter is registered for this pipeline", boxes=[], request_id=request_id)
             adapter = adapter_class(config, self.settings)
-            if config.execution_mode in ("det_rec", "rec"):
+            if config.source != "official" and config.execution_mode in ("det_rec", "rec"):
                 adapter.gateway = BatchingClient(adapter.gateway, self.batches)
             try:
                 result = await adapter.run(

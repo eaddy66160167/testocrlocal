@@ -11,6 +11,7 @@ for (const width of [1440, 768]) {
     ];
     const errors: string[] = [];
     let gatewayChecks = 0;
+    let nextPipelineId = 0;
     let failDelete = false;
     page.on("pageerror", e => errors.push(e.message));
     await page.route("**/api/**", async route => {
@@ -43,8 +44,8 @@ for (const width of [1440, 768]) {
         if (req.method() !== "GET") {
           const body = req.postDataJSON();
           const index = req.method() === "PUT" ? pipelines.findIndex(p => path.includes(p.pipeline_id)) : -1;
-          const pipeline = { ...body, id: "id", pipeline_id: index >= 0 ? pipelines[index].pipeline_id : `dynamic_${pipelines.length}`,
-            integrated_options: body.execution_mode === "integrated" ? { version: body.version, det_weight: body.det_weight, rec_weight: body.rec_weight } : null,
+          const pipeline = { ...body, id: "id", pipeline_id: index >= 0 ? pipelines[index].pipeline_id : `dynamic_${nextPipelineId++}`,
+            integrated_options: body.execution_mode === "integrated" ? { version: body.version, det_weight: body.det_weight, rec_weight: body.rec_weight, paddle_model_defaults: body.paddle_model_defaults, det_version: body.det_version, rec_version: body.rec_version } : null,
             det_model: models.find(m => m.id === body.det_model_id), rec_model: models.find(m => m.id === body.rec_model_id) };
           if (index >= 0) pipelines[index] = pipeline; else pipelines.push(pipeline);
           return route.fulfill({ json: pipeline, status: index >= 0 ? 200 : 201 });
@@ -125,5 +126,28 @@ for (const width of [1440, 768]) {
     await page.reload();
     await expect(page.getByRole("heading",{name:"Separate stages",exact:true})).toBeVisible();
     expect(pipelines).toHaveLength(1);
+    await page.getByRole("button", { name: "เพิ่ม Pipeline", exact: true }).click();
+    await page.getByLabel("ชื่อ Pipeline", { exact: true }).fill("Official mixed");
+    await page.getByRole("combobox", { name: "1. ประเภทโมเดล", exact: true }).selectOption("official");
+    await expect(page.locator("form[data-execution-mode]")).toHaveAttribute("data-execution-mode", "integrated");
+    await expect(page.getByRole("combobox", {name:"การเรียก PaddleOCR"})).toHaveCount(0);
+    await expect(page.getByLabel("ใช้โมเดลตามค่า env ของ Gateway")).toHaveCount(0);
+    await det.getByRole("combobox", { name: "Model version", exact: true }).selectOption("6");
+    await rec.getByRole("combobox", { name: "Model version", exact: true }).selectOption("5");
+    await rec.getByRole("combobox", { name: "Weight / โมเดล", exact: true }).selectOption("thai_ft_v1");
+    await expect(page.getByText("/api/v1/ocr-results?engine=paddle&det_version=6&rec_version=5&det_model=baseline&rec_model=thai_ft_v1", {exact:true})).toBeVisible();
+    await page.getByRole("button", { name: "บันทึก Pipeline", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Official mixed" })).toBeVisible();
+    expect(pipelines[1].integrated_options).toMatchObject({paddle_model_defaults:false, det_version:"6", rec_version:"5", rec_weight:"thai_ft_v1"});
+    expect(pipelines[1].det_model_id).toBeNull();
+    await page.reload();
+    const official = page.locator("section").filter({has:page.getByRole("heading",{name:"Official mixed",exact:true})});
+    await official.getByRole("button",{name:"แก้ไข",exact:true}).click();
+    await expect(rec.getByRole("combobox",{name:"Weight / โมเดล",exact:true})).toHaveValue("thai_ft_v1");
+    await det.getByRole("combobox",{name:"Model version",exact:true}).selectOption("5");
+    await det.getByRole("combobox",{name:"Weight / โมเดล",exact:true}).selectOption("thai_ft_v2");
+    await page.getByRole("button",{name:"บันทึก Pipeline",exact:true}).click();
+    await expect.poll(() => pipelines[1].integrated_options).toMatchObject({paddle_model_defaults:false, det_version:"5", det_weight:"thai_ft_v2", rec_version:"5", rec_weight:"thai_ft_v1"});
+    expect(errors).toEqual([]);
   });
 }
