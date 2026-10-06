@@ -7,13 +7,13 @@ from app.core.errors import AppError
 from app.db.models import GlobalField, Metric, OCRField, PipelineRun, now
 from app.schemas.contracts import GlobalEvaluation
 from app.services.field_service import compact_comparison, field_summary
-from app.services.global_order import canonical_document_text, reading_order
+from app.services.global_order import canonical_document_text, reading_order, ordered_detection_boxes
 from app.services.metrics_service import normalize_text
 from app.services.pipeline_manager import PipelineManager
 
 
 def reading_lines(run):
-    """Top then left within ONE field; raw boxes/envelope are never mutated.
+    """Visual row order within ONE field; raw boxes/envelope are never mutated.
 
     Missing geometry falls back to upstream text lines for the entire field.
     This is deterministic line order, not semantic/table reading order.
@@ -22,9 +22,7 @@ def reading_lines(run):
     if boxes and all(isinstance(b.get("bbox"), list) and len(b["bbox"]) == 4 for b in boxes):
         return [
             b["text"]
-            for b in sorted(
-                boxes, key=lambda b: (b["bbox"][1], b["bbox"][0], b["bbox"][3], b["bbox"][2])
-            )
+            for b in ordered_detection_boxes(boxes)
         ]
     return (run.final_text or "").splitlines() or [""]
 
@@ -299,8 +297,8 @@ class GlobalLayoutService:
                         diagnostics = {key: getattr(result, key) for key in trace_keys}
                         raw_parts[result.pipeline_id].append(result.raw_text if result.raw_text is not None else result.final_text or "")
                         diagnostics.update(
-                            boxes=result.boxes,
-                            ordering="top_then_left_within_global_field",
+                            boxes=ordered_detection_boxes(result.boxes),
+                            ordering="row_then_left_within_global_field",
                         )
                         parent.fields.append(
                             OCRField(
