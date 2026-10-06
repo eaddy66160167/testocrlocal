@@ -1,4 +1,4 @@
-﻿# OCR Testing & Benchmark Platform
+# OCR Testing & Benchmark Platform
 
 ## 1. ภาพรวมระบบ
 
@@ -32,16 +32,20 @@ Field มี UUID และพิกัดอ้างอิงภาพต้�
 | หน้า | Route | ใช้ทำอะไร |
 |---|---|---|
 | OCR Test | `/` และ `/workflow/[id]/…` | อัปโหลด เตรียม Field รัน OCR และประเมิน GT |
-| History | `/history` | เปิดผลที่บันทึก กรองประเภท/Pipeline/วันที่ |
-| Comparison | `/matrix` | ภาพรวมการเลือก Pipeline และแยกตามประเภทเอกสาร |
-| Dataset | `/dataset` | เลือก source crop + GT ยืนยันเพื่อส่งออก |
+| History | `/history` | เปิดผล กรองข้อมูล เลือกหลายรายการและลบประวัติเป็นชุด |
+| Comparison | `/matrix` | สรุปคำแนะนำก่อน แล้วเปิดดูคู่/หลักฐานตามต้องการ |
+| Dataset | `/dataset` | เลือก source crop + GT ยืนยันเพื่อส่งออก หรือนำออกเป็นชุด |
 | Pipeline Settings | `/settings/pipelines` | จัดการโมเดลและ Pipeline |
-| System Logs | `/logs` | ตรวจเหตุการณ์สำหรับผู้พัฒนา/ผู้ดูแล |
+| System Logs | `/logs` | compatibility route ที่แจ้งว่าปิดการบันทึกลง DB |
 | Saved Test | `/test/[id]` | ดูชุดทดสอบและผลย้อนหลัง |
 
-**Analysis รวมเข้า Comparison แล้ว** ใช้แท็บ **ภาพรวม** และ **แยกตามประเภทเอกสาร** ลิงก์เดิม `/analytics/categories` redirect ไป `/matrix?view=by-type` โดยรักษาตัวกรองที่รองรับ
+**Analysis รวมเข้า Comparison แล้ว** ใช้แท็บ **สรุปผล** และ **ตามประเภทเอกสาร** ลิงก์เดิม `/analytics/categories` redirect ไป `/matrix?view=by-type` โดยรักษาตัวกรองที่รองรับ
 
 Logs ไม่อยู่ใน navigation สำหรับผู้ใช้ทั่วไป แต่ route/API ยังอยู่ การซ่อนเมนู **ไม่ใช่ access control** ระบบนี้ยังไม่มี login หรือ roles
+
+Comparison แสดงคำแนะนำหรือเหตุผลที่ยังตัดสินผู้ชนะไม่ได้ก่อน ตามด้วยสามการ์ด: ใครนำด้านความแม่นยำ, ข้อมูลเทียบตรงกัน และงานถัดไป แสดงงานสำคัญไม่เกินสามรายการก่อน “ดูทั้งหมด” การเลือกสอง Pipeline โดยตรงใช้ตรวจหลักฐานเท่านั้น ไม่เปลี่ยนคำแนะนำ/ranking ของระบบ สถิติ กราฟ ตารางทุก Pipeline และผลรายชุดทดสอบพับไว้จนผู้ใช้เปิดดู
+
+History เลือกได้สูงสุด 200 รายการรวมหลายหน้า checkbox หัวตารางเลือกเฉพาะแถวที่มองเห็นในหน้าปัจจุบัน เปลี่ยนประเภท/Pipeline/วันที่/ค้นหาชื่อ/สถานะจะล้างการเลือก ต้องยืนยันก่อนลบ ผล OCR, Metrics และ GT ของชุดที่เลือกจะถูกลบ แต่ source Document และชุดทดสอบอื่นของเอกสารเดียวกันยังอยู่
 
 ## 5. Comparison Decision Engine
 
@@ -76,11 +80,11 @@ Global workflow เก็บ processing time เป็น **ผลรวม dura
 
 แนว Pareto ใช้ได้เมื่อทุก active Pipeline มี common cohort ร่วมกันอย่างน้อย 5 Documents และมีเวลาให้เทียบ ถ้า common cohort ไม่พอ ใช้ cohort ของแต่ละ Pipeline พร้อมข้อความ **ชุดเอกสารไม่ตรงกัน เทียบกันตรง ๆ ไม่ได้** และไม่วาด frontier ความเร็วไม่ใช้เลือก accuracy recommendation
 
-## 7. แยกตามประเภทเอกสาร
+## 7. ตามประเภทเอกสาร
 
 ใช้ `document_type_id` ซึ่งเป็นประเภทเอกสารทางธุรกิจ ตารางมี **ทุกประเภท**, ประเภทที่มีข้อมูลในขอบเขต และ **ไม่ระบุประเภท** เมื่อมีเอกสารไม่ถูกจัดประเภท ประเภท custom ที่เก็บถาวรแต่ยังถูกอ้างอิงไม่ถูกทิ้ง แต่ละ Document อยู่เพียงประเภทเดียว ผลรวมจำนวน Documents ของประเภทจึงเท่ากับแถวทุกประเภท
 
-แต่ละช่องเป็น **descriptive Document-mean CER + n Documents** ของ Pipeline นั้น ไม่ใช่ผู้ชนะ หาก n ต่างกันมีคำเตือน ส่วนคำแนะนำรายประเภทใช้ paired engine เดียวกับภาพรวม กดขยายเพื่อดูคู่/CI แถวทุกประเภทใช้ผล engine ของภาพรวมตรงกัน ข้อมูลเก็บถาวรไม่เป็นคำแนะนำปัจจุบัน
+หน้าหลักแสดงการ์ดคำแนะนำรายประเภทก่อน รวมทุกประเภท ประเภทที่ใช้งาน ประเภทเก็บถาวรที่ยังมีข้อมูลอ้างอิง และไม่ระบุประเภท ตารางเดิมเปิดจาก **ดูตารางทุก Pipeline** แต่ละช่องเป็น **descriptive Document-mean CER + n Documents** ของ Pipeline นั้น ไม่ใช่ผู้ชนะ หาก n ต่างกันมีคำเตือน ส่วนคำแนะนำรายประเภทใช้ paired engine เดียวกับภาพรวม กดขยายเพื่อดูคู่/CI แถวทุกประเภทใช้ผล engine ของภาพรวมตรงกัน ข้อมูลเก็บถาวรไม่เป็นคำแนะนำปัจจุบัน
 
 ## 8. Metrics
 
@@ -105,6 +109,8 @@ GT แยกจาก OCR prediction เสมอ Global Field UUID เป็น
 - **Per Field / Sub-fields**: GT ของแต่ละ Global Field; backend รองรับ subset ที่มี GT ยืนยันและผลประเมินแล้ว ภาพรวม legacy semantics นี้ยังคงเดิม UI ปัจจุบันช่วยซิงก์ Whole Field/Sub-fields และกำหนดให้กรอกครบก่อนคำนวณ
 - แก้ GT จะ invalidates evaluation ที่เกี่ยวข้อง ต้องคำนวณใหม่ ไม่ใช้ draft เป็นหลักฐานสุดท้าย
 - GT ที่ว่างหลัง normalization ไม่เข้าเกณฑ์; GT หนึ่งอักขระที่ไม่ว่างใช้ได้ ไม่มีขั้นต่ำความยาวแบบตั้งเอง
+
+Evaluation ที่เก็บใน DB เป็น compact metrics/edit totals/GT unit counts/mode/field IDs/time ไม่เก็บ duplicate OCR/GT, normalized text copies หรือ events/spans การเปิด detail หรือ Error Analysis จึงคำนวณ alignment จาก OCR + GT เมื่อร้องขอ โดยใช้ normalization และสูตรเดิม ไม่คำนวณระหว่างโหลด History, Dataset หรือ Comparison
 
 Diff แยก substitution (แทนที่), deletion (หายจาก OCR), insertion (เกินใน OCR) พร้อมตำแหน่ง normalized char/token และตัวแสดงความผิดพลาด ดู [Global Layout](docs/global-layout.md) และ [Error Analysis/Dataset](docs/error-analysis-dataset.md)
 
@@ -134,11 +140,11 @@ flowchart LR
 | GlobalField | พื้นที่อ่านร่วมและ GT ของ Field ตาม UUID |
 | PipelineConfig | configuration ของ Pipeline ที่รันได้ |
 | OCRModel | registry รุ่น/weight/source และ paths สำหรับ DET/REC |
-| PipelineRun | ผล, configuration snapshot, geometry, tracing และเวลา |
+| PipelineRun | ผล, compact model provenance, geometry, tracing และเวลา |
 | OCRField | คำทำนาย/evaluation ของ PipelineRun ต่อ Field |
 | Metric | CER/WER/Exact Match ระดับผลรัน |
-| OCRErrorEvent | เหตุการณ์ความผิดพลาดตาม alignment |
-| AppLog | เหตุการณ์ operational และ identifiers ที่ใช้ debug |
+| OCRErrorEvent | ตาราง compatibility; evaluation ใหม่ไม่สร้าง rows และคำนวณ alignment เมื่อร้องขอ |
+| AppLog | ตาราง compatibility; ปิด DB persistence ใช้ runtime logs สำหรับ failures |
 | Category | metadata ภายใน/legacy; ไม่ใช่ตัวกรองผู้ใช้ทั่วไป |
 
 `document_type` เป็นชนิดไฟล์เชิงเทคนิค image/pdf; `document_type_id` เป็น business type ทั้งสองอย่างแยกกัน `document_id` เป็น identifier ภายใน ผู้ใช้ทั่วไปไม่ต้องพิมพ์ UUID เอง ไฟล์ภาพ/PDF อยู่ใน StorageService ไม่เก็บ Base64 ใน PostgreSQL
@@ -147,13 +153,13 @@ flowchart LR
 
 Settings ใช้ OCR model registry แยก DET และ REC เลือก source Custom/Official, version และ weight ระบบหลังบ้านรองรับ integrated OCR, DET → perspective crops → REC และ REC-only; UI สร้าง Pipeline เป็น DET → REC และเก็บการรองรับ config เก่าไว้
 
-Runtime ใช้ registered batch paths และ repeated multipart `images` query ใน paths เป็น authoritative ไม่เดา weight จากชื่อ Pipeline Official baseline ไม่เพิ่ม `model` ส่วน Custom paths ระบุ model ตาม registry แก้ path มีผลกับการรันครั้งต่อไป ผลเก่าเก็บ snapshot เดิม
+Runtime ใช้ registered batch paths และ repeated multipart `images` query ใน paths เป็น authoritative ไม่เดา weight จากชื่อ Pipeline Official baseline ไม่เพิ่ม `model` ส่วน Custom paths ระบุ model ตาม registry แก้ path มีผลกับการรันครั้งต่อไป ผลเก่าที่มีอยู่ยังอ่านได้ตาม snapshot เดิม ส่วนผลใหม่เก็บเฉพาะ provenance ที่จำเป็น
 
 ไม่มีรายการ fixed Pipelines ที่สร้างกลับอัตโนมัติเพื่อ analytics Pipeline ที่รันได้ขึ้นกับ configuration จริง ไม่ใช่จำนวนคอลัมน์ที่ hardcode การเชื่อมต่อ Gateway สำเร็จไม่ได้รับรองว่าโมเดลทุก combination ออนไลน์ ดู [Dynamic Pipelines](docs/dynamic-pipelines.md) และ [Model Gateway](docs/model-gateway.md)
 
 ## 12. Historical Continuity
 
-PipelineRun เก็บ ID/name/configuration และ raw upstream response ของตอนรัน แม้ PipelineConfig ถูกลบ ผลเดิมยังเปิดและใช้ descriptive analytics ได้ในชื่อ **เก็บถาวร** โดยไม่สร้าง executable config กลับมา Pipeline ที่ disabled ไม่ใช้ recommendation ปัจจุบัน
+PipelineRun เก็บ ID/name, compact model identity, OCR text, geometry, metrics และ timing/tracing ของตอนรัน ไม่ archive Gateway response เต็มสำหรับผลใหม่ แม้ PipelineConfig ถูกลบ ผลเดิมยังเปิดและใช้ descriptive analytics ได้ในชื่อ **เก็บถาวร** โดยไม่สร้าง executable config กลับมา Pipeline ที่ disabled ไม่ใช้ recommendation ปัจจุบัน
 
 Eligibility ของ MatrixService ยังคงกติกาเก่าเพื่อไม่ใช้ผล archived หรือ input Hutch Full เก่าที่ไม่ตรง semantic ปัจจุบัน รายงาน run-level timestamp ใช้เวลา evaluation เมื่อมี มิฉะนั้นใช้ Metric/run ตามข้อมูลย้อนหลัง การเพิ่ม decision engine ไม่แก้ข้อมูลเก่า
 
@@ -180,6 +186,9 @@ Label คือ **crop จาก source + confirmed GT** ไม่ใช่ OCR 
 - Global Field: layout ยืนยัน, Field GT ยืนยันและไม่ว่างหลัง normalization, ไม่ถูก exclude ไม่สร้าง whole-document sample เพิ่มจาก Global case
 - Listing ตรวจ source availability; ไฟล์หายจะแสดง unavailable และเลือก export ไม่ได้ backend ปฏิเสธ export ที่มี source หายอย่างชัดเจน ไม่สร้างไฟล์ทดแทน/ไม่ทิ้ง label เงียบ ๆ
 - การเอารายการออกเป็นการ exclude จาก Dataset ไม่ลบ original, History, GT หรือ OCR results
+- เลือกได้สูงสุด 200 ตัวอย่างรวมหลายหน้า ใช้ selection เดียวสำหรับ ZIP และ bulk removal แต่จำนวน **เลือกแล้ว** แยกจาก **ที่พร้อมส่งออก**
+- ตัวอย่างที่ source หายยังเลือกนำออกได้ แต่ส่งออกไม่ได้ ไม่สร้างภาพทดแทนและไม่ทิ้ง label เงียบ ๆ ต้องคืนไฟล์หรืออัปโหลดใหม่หากต้องการใช้ตัวอย่างนั้น
+- เปลี่ยนประเภทเอกสารจะล้างการเลือก; pagination รักษาการเลือก หัวตารางเลือกเฉพาะหน้าปัจจุบัน และ bulk removal ต้องยืนยัน
 
 ```text
 dataset/
@@ -194,11 +203,11 @@ ZIP มี PNG canonical crop ที่ backend ทำจากต้นฉบ�
 
 ## 15. Logs / Observability
 
-AppLog เก็บ severity, event type, human message, time, document/test/Pipeline/page IDs, request ID, Gateway request ID และ metadata ที่จำกัด เช่น error code/count/duration ใช้ตามรอย failure หรือ latency ชื่อเอกสารที่ UI แสดงอาจมีข้อมูลส่วนบุคคล ต้องจำกัดสิทธิ์ที่ deployment layer
+ปิด AppLog DB persistence: routine application events ไม่สร้าง rows ตาราง/โมเดล LogService และ EVENTS ยังคงไว้เพื่อ compatibility `/api/logs` คืน `{enabled:false,total:0,items:[]}` โดยไม่ query AppLog หน้า `/logs` แจ้ง **ไม่ได้เปิดการบันทึก System Logs ลงฐานข้อมูล** และไม่อยู่ใน navigation ปกติ
 
-ห้ามนำ raw OCR, GT, token, Authorization, connection string, password หรือ image bytes มา log LogService ใช้ข้อความเหตุการณ์คงที่และ sanitize identifiers รายละเอียดเชิงเทคนิคเปิดดูได้จาก `/logs`; ไม่มีลิงก์ตามปกติจากหน้า Comparison/History
+Operational failures ใช้ Python/platform runtime logs ระดับ ERROR; ไม่มี success event stream ข้อมูลที่ log จำกัดเป็น event type, error code, duration และ correlation IDs ที่ผ่านการกรอง ไม่ log OCR, GT, filenames, raw Gateway payload, image bytes, token, Authorization, DB URL หรือ password การเก็บ/เข้าถึง runtime logs ขึ้นกับ platform
 
-การเก็บ Logs **90 วันเป็นคำแนะนำในการปฏิบัติงาน** ยังไม่มี automatic retention/deletion job
+OCRErrorEvent DB persistence ปิดสำหรับ evaluation ใหม่เช่นกัน Error Analysis คำนวณ substitution/deletion/insertion เมื่อร้องขอ ดูนโยบายและ synthetic storage evidence ใน [Lean database storage](docs/lean-database-storage.md)
 
 ## 16. API Overview
 
@@ -209,18 +218,18 @@ AppLog เก็บ severity, event type, human message, time, document/test/Pip
 | Health | `GET /health`, `/upload-config`, `/integrations/model-gateway/status` |
 | Document | `POST /documents`, `GET /documents/{id}/pages/{page}/image`, `POST /documents/{id}/auto-rois` |
 | Business types | `GET/POST /document-types`, `DELETE /document-types/{id}` |
-| Test cases | `GET/POST /test-cases`, `GET /test-cases/{id}`, `POST /test-cases/{id}/run` |
+| Test cases | `GET/POST /test-cases`, `GET /test-cases/{id}`, `POST /test-cases/{id}/run`, `POST /test-cases/bulk-delete` |
 | Global workflow | `GET/PUT /test-cases/{id}/global-fields`, `PUT /test-cases/{id}/global-fields/{field}/ground-truth`, `POST /test-cases/{id}/evaluate` |
 | Pipelines/models | `GET/POST /pipelines`, `PUT /pipelines/{id}/definition`, `GET/POST /pipelines/models` |
 | Analytics | `GET /history`, `/matrix`, `/analytics/summary`, `/analytics/pipelines`, `/analytics/comparison`, `/analytics/document-types`, `/analytics/errors` |
-| Dataset | `GET /dataset/samples`, `POST /dataset/export`, `DELETE /dataset/items/{id}` |
-| Operational logs | `GET /logs` |
+| Dataset | `GET /dataset/samples`, `POST /dataset/export`, `DELETE /dataset/items/{id}`, `POST /dataset/items/bulk-exclude` |
+| Operational logs | `GET /logs` — disabled/empty compatibility response |
 
 `GET /analytics/comparison` เพิ่ม document-level decisions โดยยังเก็บ `/matrix` และ summary APIs เดิมเพื่อ compatibility Production verification ใช้ GET/SELECT เท่านั้น ไม่เรียก endpoints ที่เปลี่ยนข้อมูลเพื่อทดสอบ
 
 ## 17. Backend Architecture
 
-FastAPI routes → repositories/services → SQLAlchemy 2.x + psycopg → PostgreSQL (Production: Neon) Alembic จัดการ schema, StorageService ดูแล originals, ImageService ทำ deterministic crop และ adapters/Gateway clients เรียก inference ภายนอกด้วย httpx
+FastAPI routes → repositories/services → SQLAlchemy 2.x + psycopg → PostgreSQL (Production: ฐานข้อมูลใหม่ตาม private `DATABASE_URL`) Alembic จัดการ schema, StorageService ดูแล originals, ImageService ทำ deterministic crop และ adapters/Gateway clients เรียก inference ภายนอกด้วย httpx
 
 Model Gateway key และ DB อยู่ server-only Frontend ไม่เรียก Gateway/DB โดยตรง ไม่มี local GPU/model hosting ในแอปนี้ ComparisonService logic อยู่ใน MatrixService ที่ reuse eligibility แล้วคำนวณ compact arrays ใน memory ไม่มี DB query ภายใน bootstrap ไม่มี Redis/materialized analytics cache
 
@@ -232,7 +241,9 @@ Client URL state รักษาสี่ shared filters และ comparison mo
 
 ## 19. Database / Migration
 
-Source migration head คือ **`0010_dynamic_pipelines`** เก็บ migration history ทั้งหมด ไม่มี migration ใหม่จาก decision/UI change นี้
+Source migration head คือ **`0010_dynamic_pipelines`** เก็บ migration history ทั้งหมด ไม่มี migration ใหม่จาก lean-storage/bulk-UX change
+
+Production ใช้ PostgreSQL ใหม่เป็น fresh baseline โดยตั้งใจ ไม่ติดต่อ/ย้ายข้อมูลจาก Neon เก่า ไม่สร้างข้อมูล OCR สมมติ Catalog seed ทำแบบ idempotent แต่ไม่สร้าง executable PipelineConfig อัตโนมัติ การที่ History/Dataset/Comparison ว่างและ PipelineConfig เป็นศูนย์จึงถูกต้อง ผู้ใช้สร้าง Pipeline ผ่าน Settings แล้วทำการทดสอบจริงครั้งแรกเอง ห้ามใช้ Production เป็น test fixture
 
 ```powershell
 cd backend
@@ -278,7 +289,7 @@ Environment **names** (ค่าและ safe defaults ดู [.env.example](.e
 | Public frontend | `NEXT_PUBLIC_API_BASE_URL` ฝังตอน build |
 | Test only | `TEST_DATABASE_URL` DB PostgreSQL local ที่ชื่อจบ `_test`; `E2E_API_URL`, `E2E_BASE_URL` สำหรับ test servers |
 
-ไม่ส่ง backend secrets เป็น `NEXT_PUBLIC_*` ไม่มี environment variable ใหม่จาก Comparison change ค่า Gateway key จริงใส่ private `.env` เท่านั้น token ปกติไม่ต้องใส่ quotes และไม่ใส่ช่องว่างรอบ `=`
+ไม่ส่ง backend secrets เป็น `NEXT_PUBLIC_*` ไม่มี environment variable ใหม่จาก lean-storage/bulk-UX change ค่า Gateway key จริงใส่ private `.env` เท่านั้น token ปกติไม่ต้องใส่ quotes และไม่ใส่ช่องว่างรอบ `=`
 
 ## 21. Testing
 
@@ -300,18 +311,18 @@ Tests บางส่วนจากยุค fixed Pipeline IDs ยังอ้
 
 ```powershell
 cd backend
-.venv/Scripts/python.exe -m pytest -q tests/test_comparison_decision.py tests/test_analytics_scope.py tests/test_dynamic_pipelines.py tests/test_global_batch.py tests/test_document_dataset_management.py
+.venv/Scripts/python.exe -m pytest -q tests/test_comparison_decision.py tests/test_analytics_scope.py tests/test_dynamic_pipelines.py tests/test_global_batch.py tests/test_document_dataset_management.py tests/test_lean_bulk.py
 cd ../frontend
-npm.cmd run test:e2e -- tests/analytics-stage-b.spec.ts tests/console.spec.ts tests/dynamic-pipelines.spec.ts tests/ground-truth-sync.spec.ts tests/global-comparison.spec.ts tests/global-selection.spec.ts
+npm.cmd run test:e2e -- tests/analytics-stage-b.spec.ts tests/console.spec.ts tests/dynamic-pipelines.spec.ts tests/ground-truth-sync.spec.ts tests/global-comparison.spec.ts tests/global-selection.spec.ts tests/lean-bulk.spec.ts
 ```
 
-Release gates: eligibility continuity, deterministic paired formulas, archive invariants, source-preserving diff, secret scan, diff check, schema head/drift, performance และ desktop/390px UX ก่อน normal push ผล run เฉพาะ release นี้อยู่ใน [Comparison audit](docs/comparison-redesign-audit.md) ไม่ใช่ตัวเลขรับรอง suite ทุกเวอร์ชัน
+Release gates: eligibility continuity, deterministic paired formulas, archive invariants, source-preserving diff, secret scan, diff check, schema head/drift, performance และ desktop/390px UX ก่อน normal push หลักการ/audit ของ decision engine ดู [Comparison audit](docs/comparison-redesign-audit.md) และนโยบาย/หลักฐาน synthetic storage ดู [Lean database storage](docs/lean-database-storage.md) ไม่ใช่ตัวเลขรับรอง suite ทุกเวอร์ชัน
 
 ## 22. Deployment
 
 ```text
 Browser → Vercel (Next.js) → Railway (FastAPI)
-                              ├─ Neon PostgreSQL
+                              ├─ fresh PostgreSQL (private DATABASE_URL)
                               ├─ persistent application storage
                               └─ Model Gateway
 ```
@@ -334,10 +345,11 @@ Production smoke ใน release process นี้ **read-only** อ่านข�
 
 - Paired cohort อาจเล็กหรือ CI กว้าง ยังไม่มีคำแนะนำเป็นผลที่ถูกต้องได้; ข้อมูลชุดนี้ไม่รับรอง generalization
 - WER เป็น whitespace tokens ไม่ใช่ Thai word segmentation
-- Gateway readiness ไม่รับรองแต่ละโมเดล/variant; บาง raw result-level model name เป็น stale upstream metadata เก็บตามจริงและไม่ใช้ routing
+- Gateway readiness ไม่รับรองแต่ละโมเดล/variant; บาง raw result-level model name เป็น stale upstream metadata ไม่ใช้ routing และไม่ archive response เต็ม
 - Historical source ที่หายสร้างคืนอัตโนมัติไม่ได้ ต้อง restore/re-upload
 - Draft Auto Layout อยู่ต่อ page/session จน save; ไม่ใช่ background persisted suggestion service
-- ไม่มี automatic log retention และไม่มี user auth/roles
+- AppLog/OCRErrorEvent persistence ปิด; runtime log retention ขึ้นกับ platform และไม่มี user auth/roles
+- Error Analysis เป็น on-demand alignment งานใหญ่ควรติดตาม latency; ไม่เก็บ event cache ใน DB
 - Historical evaluation timestamp บางรายการใช้ fallback ของ Metric/run; shared filters ยังคงใช้ case creation date
 - Legacy tests/configs ไม่ใช่รายการ Pipeline executable ปัจจุบัน ดูข้อ 21 ก่อนอ้างผล full suite
 
@@ -386,10 +398,13 @@ docs/                   # technical guides and release evidence
 
 ระบบใช้ Global Layout และ Dynamic Pipeline เป็น workflow ปัจจุบัน พร้อมรักษา legacy viewer/snapshots Comparison กับ Analysis รวมเป็น `/matrix` ที่มีสองมุมมอง และใช้ document-level paired engine โดยไม่เปลี่ยน OCR routes, batching, GT normalization, Dataset labels หรือ schema
 
+Production เริ่มจากฐานข้อมูลใหม่ตาม private configuration; ข้อมูลจริงจะเริ่มจากการทดสอบของผู้ใช้ ไม่มีการนำ records จาก Neon เก่ากลับมา Lean persistence เก็บ OCR/GT/geometry/metrics ที่จำเป็น แต่ไม่เก็บ response ซ้อนหรือ error/log row streams
+
 README อธิบายพฤติกรรมคงที่ ไม่ฝัง deployed commit หรือ KPI Production ชั่วคราว ตรวจ release state จริงจาก deployment metadata, health และ read-only gates ทุกครั้ง
 
 เอกสารละเอียด:
 
+- [Lean database storage / bulk management](docs/lean-database-storage.md)
 - [Comparison Decision Engine](docs/comparison-decision-engine.md)
 - [Comparison production audit และ coverage](docs/comparison-redesign-audit.md)
 - [Dynamic Pipelines](docs/dynamic-pipelines.md)
