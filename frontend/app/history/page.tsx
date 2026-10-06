@@ -3,49 +3,42 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Plus } from "lucide-react";
-import { getHistory, getCategories, getPipelines } from "@/lib/api";
-import { categoryLabel, t, userError, pipelineLabel } from "@/lib/i18n/th";
-import type { TestCase, Category, PipelineConfig, QueryFilters } from "@/types";
+import { getHistory, getAnalyticsPipelines, bulkDeleteTestCases } from "@/lib/api";
+import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
+import { t, userError, pipelineLabel } from "@/lib/i18n/th";
+import type { TestCase, AnalyticsPipeline, QueryFilters } from "@/types";
 import {
   PageHeader,
   FilterBar,
-  DatasetFilters,
   CaseStatus,
   caseState,
   LoadingState,
   EmptyState,
 } from "@/components/ConsoleUI";
+import BulkConfirm from "@/components/BulkConfirm";
+import {useManagedSelection} from "@/lib/bulk-selection";
 import DeleteHistoryButton from "@/components/DeleteHistoryButton";
 import { percent } from "@/components/MatrixTable";
 export default function HistoryPage() {
   const router = useRouter();
   const [cases, setCases] = useState<TestCase[]>([]),
-    [categories, setCategories] = useState<Category[]>([]),
-    [pipelines, setPipelines] = useState<PipelineConfig[]>([]);
-  const [filters, setFilters] = useState<QueryFilters>({}),
-    [search, setSearch] = useState(""),
+    [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
+  const [filters, setFilters] = useAnalyticsFilters();
+  const [search, setSearch] = useState(""),
     [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
+  const selection=useManagedSelection<string>(JSON.stringify([filters,search,status]), id=>id);
+  const [notice,setNotice]=useState("");
   const invalid = !!(
     filters.date_from &&
     filters.date_to &&
     filters.date_from > filters.date_to
   );
-  useEffect(() => {
-    async function restoreFilters() {
-      const q = new URLSearchParams(window.location.search);
-      if (q.get("category") || q.get("document"))
-        setFilters({
-          category: q.get("category") || undefined,
-          document: q.get("document") || undefined,
-        });
-    }
-    void restoreFilters();
-  }, []);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -57,14 +50,12 @@ export default function HistoryPage() {
       }
       await Promise.all([
         getHistory({ ...filters, limit: 21, offset }),
-        getCategories(),
-        getPipelines(),
+        getAnalyticsPipelines(),
       ])
-        .then(([h, c, p]) => {
+        .then(([h, p]) => {
           if (active) {
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
-            setCategories(c);
             setPipelines(p);
           }
         })
@@ -100,6 +91,7 @@ export default function HistoryPage() {
         description="ค้นหาเอกสาร เปิดผลล่าสุด และจัดการชุดทดสอบที่บันทึกไว้"
         actions={
           <>
+            <Link className="button secondary" href={analyticsHref("/matrix", filters)}>เปรียบเทียบผล</Link>
             <button
               className="button secondary"
               aria-label={t("Refresh history")}
@@ -129,7 +121,7 @@ export default function HistoryPage() {
         }}
       >
         <label className="field filter-search">
-          ค้นหาในรายการหน้านี้
+          ค้นหาในหน้านี้
           <input
             className="input"
             placeholder="ชื่อเอกสาร"
@@ -137,9 +129,8 @@ export default function HistoryPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </label>
-        <DatasetFilters
+        <AnalyticsFilters
           value={filters}
-          categories={categories}
           pipelines={pipelines}
           onChange={filter}
         />
@@ -180,6 +171,9 @@ export default function HistoryPage() {
           </button>
         </div>
       )}
+      {notice&&<p className="notice-banner" role="status">{notice}</p>}
+      {<section className="panel panel-body flex flex-wrap items-center gap-3" aria-label="จัดการประวัติที่เลือก"><strong>เลือกแล้ว {selection.items.length} รายการ</strong><button className="button secondary" disabled={!selection.items.length} onClick={selection.clear}>ล้างการเลือก</button><BulkConfirm count={selection.items.length} kind="history" onConfirm={async()=>{const r=await bulkDeleteTestCases(selection.items);selection.clear();setNotice(`ลบประวัติ ${r.deleted} รายการแล้ว${r.already_missing?` · ไม่พบแล้ว ${r.already_missing} รายการ`:""}`);setRevision(v=>v+1);}}/></section>}
+      <p className="filter-note">เลือกได้สูงสุด 200 รายการ รวมทุกหน้า · เปลี่ยนตัวกรองจะล้างการเลือก</p>
       <section className="panel">
         {loading ? (
           <LoadingState label="กำลังโหลดประวัติ…" />
@@ -199,10 +193,11 @@ export default function HistoryPage() {
                 </caption>
                 <thead>
                   <tr>
+                    <th><input type="checkbox" aria-label="เลือกประวัติที่เห็นในหน้านี้ทั้งหมด" checked={selection.all(visible.map(c=>c.id))} onChange={()=>selection.page(visible.map(c=>c.id))}/></th>
                     {[
                       "เอกสาร / หน้า",
-                      "วันที่",
-                      "ประเภทข้อมูล",
+                      "วันที่สร้างชุดทดสอบ (UTC)",
+                      "ประเภทเอกสาร",
                       "สถานะ",
                       "ผลล่าสุดตาม Pipeline",
                       "การทำงาน",
@@ -227,10 +222,10 @@ export default function HistoryPage() {
                           router.push(`/test/${c.id}`);
                       }}
                     >
+                      <td><input type="checkbox" aria-label={`เลือกประวัติ ${c.id}`} checked={selection.has(c.id)} disabled={!selection.has(c.id)&&selection.items.length>=200} onChange={()=>selection.toggle(c.id)}/></td>
                       <td>
                         <Link className="row-title" href={`/test/${c.id}`}>
                           {c.document.filename}
-                          <span className="block muted text-xs">{c.document.document_type_name||"ไม่ระบุประเภท"}</span>
                         </Link>
                         <span className="row-meta">
                           หน้า {c.page_number ?? 1} / {c.document.page_count}
@@ -243,25 +238,17 @@ export default function HistoryPage() {
                       </td>
                       <td>
                         <time dateTime={c.created_at}>
-                          {new Date(c.created_at).toLocaleDateString("th-TH")}
+                          {new Date(c.created_at).toLocaleDateString("th-TH", {timeZone:"UTC"})}
                         </time>
                       </td>
                       <td>
-                        <div className="row-tags">
-                          {c.categories.length
-                            ? c.categories.map((cat) => (
-                                <span className="badge neutral" key={cat.code}>
-                                  {categoryLabel(cat)}
-                                </span>
-                              ))
-                            : "—"}
-                        </div>
+                        {c.document.document_type_name || "ไม่ระบุประเภท"}
                       </td>
                       <td>
                         <CaseStatus record={c} />
                       </td>
                       <td>
-                        {pipelines.map((p) => {
+                        {pipelines.filter(p => c.runs.some(r => r.pipeline_id === p.pipeline_id)).map((p) => {
                           const r = [...c.runs]
                             .reverse()
                             .find((r) => r.pipeline_id === p.pipeline_id);
@@ -271,7 +258,7 @@ export default function HistoryPage() {
                               className="flex justify-between gap-5"
                             >
                               <span>
-                                {pipelineLabel(p.pipeline_id, p.name)}
+                                {pipelineLabel(p.pipeline_id, p.pipeline_name)}{p.retired && <span className="badge neutral">เก็บถาวร</span>}
                               </span>
                               <span>
                                 {!r ? (
@@ -290,12 +277,6 @@ export default function HistoryPage() {
                         <div className="row-actions">
                           <Link className="button small" href={`/test/${c.id}`}>
                             เปิด
-                          </Link>
-                          <Link
-                            className="button small"
-                            href={`/logs?test_case_id=${c.id}`}
-                          >
-                            ดู Log
                           </Link>
                           <DeleteHistoryButton
                             id={c.id}

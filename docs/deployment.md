@@ -29,7 +29,9 @@ cd backend
 .venv/Scripts/python.exe -m alembic check
 ```
 
-Use the intended DATABASE_URL only through the secure environment. Verify head and existing data afterwards. Startup also checks head and seeds missing types/pipelines; it does not rerun an already-applied revision. Never reset/drop/truncate production, edit historical revisions or apply a speculative downgrade. If migration fails, stop before pushing.
+Use the intended DATABASE_URL only through the secure environment. Verify head and existing data afterwards. Current head is `0010_dynamic_pipelines`; startup checks migrations and seeds the registry/default metadata while preserving the current Dynamic Pipeline architecture. It does not recreate retired static Pipeline configs. Never reset/drop/truncate production, edit historical revisions or apply a speculative downgrade. If migration fails, stop before pushing.
+
+For the Stage B analytics/UI release, schema remains 0010: verify production revision through a read-only transaction before implementation and immediately before push. No migration is needed. Production verification is GET/SELECT-only; skip the synthetic mutation smoke below for this release. Check raw latest eligible run count against Matrix/summary, provenance/ties, ≥5 timing/ranking, historical labels and URL scope. Keep screenshots under ignored `.runtime/` and never publish document/GT content.
 
 ## Validation and smoke
 

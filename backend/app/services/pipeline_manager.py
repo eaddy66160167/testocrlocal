@@ -2,9 +2,15 @@ import asyncio
 from uuid import uuid4
 
 from app.db.models import PipelineRun
-from app.integrations.model_gateway import GatewayError
 from app.integrations.batch_gateway import BatchGateway, BatchingClient
-from app.pipelines.dynamic import DynamicDetectionRecognitionAdapter, DynamicRecognitionAdapter, DynamicCustomAdapter, DynamicOfficialAdapter
+from app.integrations.model_gateway import GatewayError
+from app.pipelines.dynamic import (
+    DynamicCustomAdapter,
+    DynamicDetectionRecognitionAdapter,
+    DynamicOfficialAdapter,
+    DynamicRecognitionAdapter,
+)
+from app.services.lean_storage import compact_provenance
 from app.services.metrics_service import normalize_text
 
 
@@ -49,13 +55,13 @@ class PipelineManager:
                     pipeline_id=result.pipeline_id,
                     pipeline_name=result.pipeline_name,
                     status="success",
-                    raw_text=result.raw_text,
+                    raw_text=result.raw_text if result.raw_text != result.final_text else None,
                     final_text=result.final_text,
                     normalized_text=normalize_text(result.final_text),
                     confidence=result.confidence,
                     processing_time_ms=result.processing_time_ms,
                     boxes=result.boxes,
-                    raw_response=result.raw_response,
+                    raw_response=compact_provenance(result.raw_response),
                     **result.diagnostics,
                 )
             except GatewayError as exc:

@@ -2,31 +2,33 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getCategories, getMatrix, getPipelines, getHistory } from "@/lib/api";
+import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison } from "@/lib/api";
+import { useAnalyticsFilters, useComparisonDisplay } from "@/lib/analytics-scope";
+import AnalyticsFilters from "@/components/AnalyticsFilters";
+import {DecisionOverview, ByType} from "@/components/ComparisonDecision";
+import type {Comparison} from "@/types/comparison";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
-  Category,
-  MatrixRow,
-  PipelineConfig,
-  QueryFilters,
+  AnalyticsPipeline,
+  AnalyticsSummary,
   TestCase,
 } from "@/types";
-import MatrixTable, { percent } from "@/components/MatrixTable";
+import { percent } from "@/components/MatrixTable";
 import {
   PageHeader,
   FilterBar,
-  DatasetFilters,
   LoadingState,
   EmptyState,
-  Stat,
 } from "@/components/ConsoleUI";
 export default function MatrixPage() {
-  const [rows, setRows] = useState<MatrixRow[]>([]),
-    [cases, setCases] = useState<TestCase[]>([]),
-    [categories, setCategories] = useState<Category[]>([]),
-    [pipelines, setPipelines] = useState<PipelineConfig[]>([]);
-  const [filters, setFilters] = useState<QueryFilters>({}),
-    [offset, setOffset] = useState(0),
+  const [cases, setCases] = useState<TestCase[]>([]),
+    [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]),
+    [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [filters, setFilters] = useAnalyticsFilters();
+  const display = useComparisonDisplay();
+  const [decision, setDecision] = useState<Comparison|null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
     [search, setSearch] = useState(""),
     [onlyGT, setOnlyGT] = useState(false),
@@ -48,18 +50,18 @@ export default function MatrixPage() {
         return;
       }
       await Promise.all([
-        getMatrix(filters),
         getHistory({ ...filters, limit: 21, offset }),
-        getCategories(),
-        getPipelines(),
+        getAnalyticsPipelines(),
+        getAnalyticsSummary(filters),
+        getComparison(filters, display.includeArchived),
       ])
-        .then(([r, h, c, p]) => {
+        .then(([h, p, s, d]) => {
           if (active) {
-            setRows(r);
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
-            setCategories(c);
             setPipelines(p);
+            setSummary(s);
+            setDecision(d);
           }
         })
         .catch((e) => {
@@ -73,27 +75,21 @@ export default function MatrixPage() {
     return () => {
       active = false;
     };
-  }, [filters, offset, revision, invalid]);
-  const best = rows
-    .filter((r) => r.cer !== null)
-    .sort((a, b) => a.cer! - b.cer!)[0];
-  const fastest = rows
-    .filter((r) => r.avg_time_ms !== null && r.successful_runs > 0)
-    .sort((a, b) => a.avg_time_ms! - b.avg_time_ms!)[0];
+  }, [filters, offset, revision, invalid, display.includeArchived]);
   const visible = cases.filter(
     (c) =>
       (!onlyGT || c.ground_truth_raw !== null) &&
       (!search ||
         c.document.filename.toLowerCase().includes(search.toLowerCase())),
   );
-  const selected = pipelines.filter(
+  const selected = (decision?.pipelines ?? []).filter(
     (p) => !filters.pipeline || p.pipeline_id === filters.pipeline,
   );
   return (
     <div className="page-stack">
       <PageHeader
         title="เปรียบเทียบ Pipeline"
-        description="ดูผลแต่ละชุดทดสอบควบคู่กับค่าความแม่นยำและเวลาจากชุดข้อมูลเดียวกัน"
+        description="เลือก Pipeline ที่ควรใช้ จากผลบนเอกสารชุดเดียวกัน"
         actions={
           <button
             className="button secondary"
@@ -105,7 +101,10 @@ export default function MatrixPage() {
           </button>
         }
       />
-      <FilterBar
+      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div>
+      <label className="flex gap-2 items-center"><input type="checkbox" checked={!display.includeArchived} onChange={e=>display.update("include_archived",e.target.checked ? "" : "1")}/>เฉพาะ Pipeline ที่ใช้งานอยู่</label>
+      <button className="button secondary self-start" aria-expanded={showFilters || Object.values(filters).some(Boolean)} onClick={()=>setShowFilters(v=>!v)}>ตัวกรองเอกสารและวันที่</button>
+      <div hidden={!showFilters && !Object.values(filters).some(Boolean)}><FilterBar
         count={
           Object.values(filters).filter(Boolean).length +
           Number(!!search) +
@@ -118,9 +117,8 @@ export default function MatrixPage() {
           setOffset(0);
         }}
       >
-        <DatasetFilters
+        <AnalyticsFilters
           value={filters}
-          categories={categories}
           pipelines={pipelines}
           onChange={(k, v) => {
             setFilters((old) => ({ ...old, [k]: v || undefined }));
@@ -136,22 +134,7 @@ export default function MatrixPage() {
             placeholder="ชื่อเอกสาร"
           />
         </label>
-        <label className="field">
-          Document ID
-          <input
-            className="input"
-            value={filters.document || ""}
-            onChange={(e) => {
-              setFilters((old) => ({
-                ...old,
-                document: e.target.value || undefined,
-              }));
-              setOffset(0);
-            }}
-            placeholder="UUID"
-          />
-        </label>
-      </FilterBar>
+      </FilterBar></div>
       {invalid && (
         <p className="error-banner" role="alert">
           วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น
@@ -174,36 +157,9 @@ export default function MatrixPage() {
         !invalid &&
         !error && (
           <>
-            <div className="stat-grid">
-              <Stat
-                label="ชุดทดสอบในหน้าตารางนี้"
-                value={cases.length}
-                note={`มี Ground Truth ${cases.filter((c) => c.ground_truth_raw !== null).length} ชุด`}
-              />
-              <Stat
-                label="ผลที่ประเมินความแม่นยำแล้ว"
-                value={rows.reduce((n, r) => n + r.evaluated_runs, 0)}
-                note="จำนวนผลจากทุก Pipeline ตามตัวกรอง API"
-              />
-              <Stat
-                label="CER ต่ำที่สุด ↓"
-                value={percent(best?.cer)}
-                note={
-                  best
-                    ? pipelineLabel(best.pipeline_id, best.pipeline_name)
-                    : "ต้องมี Ground Truth"
-                }
-              />
-              <Stat
-                label="Pipeline ที่เร็วที่สุด ↓"
-                value={fastest ? `${Math.round(fastest.avg_time_ms!)} ms` : "—"}
-                note={
-                  fastest
-                    ? pipelineLabel(fastest.pipeline_id, fastest.pipeline_name)
-                    : "ยังไม่มีผลสำเร็จ"
-                }
-              />
-            </div>
+            {decision && (display.view === "overall" ? <DecisionOverview data={decision}/> : <ByType data={decision}/>)}
+            <details className="panel panel-body"><summary className="cursor-pointer font-semibold">ผลรายชุดทดสอบ</summary>
+            <p className="filter-note">คำแนะนำใช้เอกสารชุดเดียวกันแบบเทียบเป็นคู่ · ตารางด้านล่างเป็นผลรายชุดทดสอบ · ค้นหาและ GT มีผลเฉพาะหน้านี้</p>
             {cases.length ? (
               <section className="panel">
                 <div className="panel-header">
@@ -239,7 +195,7 @@ export default function MatrixPage() {
                           <th scope="col">เอกสาร / หน้า</th>
                           {selected.map((p) => (
                             <th scope="col" key={p.pipeline_id}>
-                              {pipelineLabel(p.pipeline_id, p.name)}
+                              {pipelineLabel(p.pipeline_id, p.pipeline_name)}{p.retired && <span className="badge neutral">เก็บถาวร</span>}
                             </th>
                           ))}
                         </tr>
@@ -270,12 +226,7 @@ export default function MatrixPage() {
                                   {!r ? (
                                     <span className="muted">ยังไม่ทดสอบ</span>
                                   ) : r.status === "error" ? (
-                                    <Link
-                                      className="badge error"
-                                      href={`/logs?test_case_id=${c.id}`}
-                                    >
-                                      ผิดพลาด · ดู Log
-                                    </Link>
+                                    <span className="badge error">ประมวลผลไม่สำเร็จ</span>
                                   ) : (
                                     <>
                                       <strong>
@@ -311,7 +262,7 @@ export default function MatrixPage() {
                 )}
                 <div className="table-footer">
                   <span>
-                    หน้า {offset / 20 + 1} · {visible.length} ชุด
+                    หน้า {offset / 20 + 1} · แสดง {visible.length} รายการในหน้านี้ จาก {summary?.history_cases ?? "—"} ชุดที่เคยรัน
                   </span>
                   <div>
                     <button
@@ -344,22 +295,12 @@ export default function MatrixPage() {
                 />
               </section>
             )}
-            {rows.some((r) => r.tests > 0) && (
-              <section className="panel">
-                <div className="panel-header">
-                  <h2>ภาพรวมตามตัวกรองข้อมูล</h2>
-                  <span className="muted text-xs">
-                    ค่าจาก API · ไม่รวมตัวกรองเฉพาะหน้าตาราง
-                  </span>
-                </div>
-                <MatrixTable rows={rows} />
-              </section>
-            )}
             <p className="filter-note">
               CER / WER / เวลา: ต่ำดีกว่า · Exact Match / Confidence: สูงดีกว่า
               · เปรียบเทียบจำนวนตัวอย่างเสมอ โดยเฉพาะเมื่อ Pipeline
               มีผลสำเร็จไม่เท่ากัน
             </p>
+            </details>
           </>
         )
       )}

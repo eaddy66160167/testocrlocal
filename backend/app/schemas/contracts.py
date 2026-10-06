@@ -175,6 +175,7 @@ class PipelineConfigUpdate(InputModel):
 
 
 class BenchmarkFilters(BaseModel):
+    document_type_id: UUID | None = None
     category: str | None = None
     pipeline: str | None = Field(default=None, max_length=50)
     date_from: date | None = None
@@ -231,3 +232,18 @@ class DatasetExport(InputModel):
         if len(ids) != len(set(ids)):
             raise ValueError("Select each sample only once")
         return ids
+
+
+class BulkCases(InputModel):
+    test_case_ids: list[UUID] = Field(min_length=1, max_length=200)
+
+
+class BulkDataset(InputModel):
+    test_case_ids: list[UUID] = Field(default_factory=list, max_length=200)
+    global_field_ids: list[UUID] = Field(default_factory=list, max_length=200)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        if not 1 <= len(self.test_case_ids) + len(self.global_field_ids) <= 200:
+            raise ValueError("Select between 1 and 200 samples")
+        return self

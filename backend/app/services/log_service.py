@@ -1,8 +1,7 @@
+import logging
 import re
 
 from sqlalchemy.engine import make_url
-
-from app.db.models import AppLog
 
 EVENTS = {
     "document_uploaded": "อัปโหลดเอกสารแล้ว",
@@ -53,16 +52,11 @@ class LogService:
             metadata["count"] = count
         if run and run.processing_time_ms is not None:
             metadata["duration_ms"] = run.processing_time_ms
-        record = AppLog(
-            event_type=event_type, message=EVENTS[event_type],
-            level="ERROR" if event_type.endswith("error") else "INFO",
-            test_case_id=case.id if case else None,
-            document_id=case.document_id if case else document_id,
-            page_number=case.page_number if case else page_number,
-            pipeline_id=run.pipeline_id if run else None,
-            request_id=identifier(run.request_id if run else request_id),
-            gateway_request_id=identifier(run.gateway_request_id if run else gateway_request_id),
-            details=metadata,
-        )
-        self.session.add(record)
-        return record
+        # Routine successes are silent; failures go to platform runtime logs only.
+        if event_type.endswith("error"):
+            logging.getLogger("ocrtest.runtime").error(
+                "event=%s code=%s pipeline=%s request=%s duration_ms=%s",
+                event_type, code, identifier(run.pipeline_id if run else None),
+                identifier(run.request_id if run else request_id), metadata.get("duration_ms"),
+            )
+        return None

@@ -3,10 +3,25 @@ import fs from "node:fs";
 import path from "node:path";
 const api = process.env.E2E_API_URL || "http://127.0.0.1:8100";
 let caseId: string;
+let documentTypeId: string;
+let cropId: string, fullId: string;
+const fixtureSuffix = `${Date.now()}-${process.pid}`;
+const cropName = `Console Crop ${fixtureSuffix}`;
+const fullName = `Console Full ${fixtureSuffix}`;
 test.beforeAll(async ({ request }) => {
+  const kind = await request.post(`${api}/api/document-types`, {data:{name:`Console Document ${fixtureSuffix}`}});
+  expect(kind.ok()).toBeTruthy();
+  documentTypeId = (await kind.json()).id;
+  const pipelines = await Promise.all([cropName, fullName].map(async name => {
+    const response = await request.post(`${api}/api/pipelines`, {data:{name,source:"custom",execution_mode:"integrated",version:"6",det_weight:"baseline",rec_weight:"baseline"}});
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()).pipeline_id as string;
+  }));
+  [cropId,fullId] = pipelines;
   const doc = await (
     await request.post(`${api}/api/documents`, {
       multipart: {
+        document_type_id: documentTypeId,
         file: {
           name: "console-review.pdf",
           mimeType: "application/pdf",
@@ -28,7 +43,7 @@ test.beforeAll(async ({ request }) => {
   ).json();
   caseId = saved.id;
   await request.post(`${api}/api/test-cases/${caseId}/run`, {
-    data: { pipelines: ["mint", "hutch_crop", "hutch_full"] },
+    data: { pipelines },
   });
 });
 for (const [width, height] of [
@@ -56,7 +71,8 @@ for (const [width, height] of [
       await expect(page.locator("main .loading-state")).toHaveCount(0);
       await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
       if (route.startsWith("/test/")) {
-        await expect(page.getByTestId("result-text-mint")).toBeVisible();
+        await page.getByRole("tab", { name: cropName, exact: true }).click();
+        await expect(page.getByTestId(`result-text-${cropId}`)).toBeVisible();
         await expect(
           page.getByTestId("document-viewer").locator("canvas").first(),
         ).toBeVisible();
@@ -77,26 +93,26 @@ for (const [width, height] of [
         fullPage: true,
       });
       const nav = page.locator('#console-navigation a[aria-current="page"]');
-      await expect(nav).toHaveCount(1);
+      await expect(nav).toHaveCount(route === "/logs" ? 0 : 1);
     }
     await page.locator('#console-navigation a[href="/history"]').click();
     await expect(page).toHaveURL(/\/history$/);
     expect(errors).toEqual([]);
   });
-test("library filters, detail tabs, missing metrics and category history links", async ({
+test("business library filters, detail tabs, missing metrics and history links", async ({
   page,
   request,
 }) => {
   await page.goto("/history?category=thai_text");
-  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveValue(
-    "thai_text",
-  );
-  await page.getByLabel("ค้นหาในรายการหน้านี้").fill("console-review.pdf");
+  await expect.poll(()=>new URL(page.url()).search).toBe("");
+  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveCount(0);
+  await page.getByLabel("ค้นหาในหน้านี้", {exact:true}).fill("console-review.pdf");
   await page.locator(`a[href="/test/${caseId}"]`).first().click();
-  await expect(page.getByTestId("result-text-mint")).toBeVisible();
-  await page.getByRole("tab", { name: "Hutch Full", exact: true }).click();
-  await expect(page.getByTestId("result-text-hutch_full")).toBeVisible();
-  await expect(page.getByTestId("result-text-mint")).toHaveCount(0);
+  await page.getByRole("tab", { name: cropName, exact: true }).click();
+  await expect(page.getByTestId(`result-text-${cropId}`)).toBeVisible();
+  await page.getByRole("tab", { name: fullName, exact: true }).click();
+  await expect(page.getByTestId(`result-text-${fullId}`)).toBeVisible();
+  await expect(page.getByTestId(`result-text-${cropId}`)).toHaveCount(0);
   await page
     .getByTestId("technical-details")
     .locator("summary")
@@ -104,13 +120,14 @@ test("library filters, detail tabs, missing metrics and category history links",
     .click();
   await expect(page.getByText("SAME INPUT", { exact: true })).toBeVisible();
   await page.goto("/analytics/categories");
+  await page.getByRole("button", { name: "ตัวกรองเอกสารและวันที่", exact: true }).click();
+  await page.getByLabel("ประเภทเอกสาร (ธุรกิจ)").selectOption(documentTypeId);
+  await page.getByText("ดูตารางทุก Pipeline", {exact:true}).click();
   await expect(
-    page.getByRole("columnheader", { name: "ตัวอย่าง / มี GT" }),
+    page.getByRole("table", { name: "เปรียบเทียบตามประเภทเอกสาร", exact: true }),
   ).toBeVisible();
-  await page.locator('main a[href="/history?category=thai_text"]').click();
-  await expect(page.getByLabel("ประเภทข้อมูล", { exact: true })).toHaveValue(
-    "thai_text",
-  );
+  await page.locator('#console-navigation a[href^="/history"]').click();
+  await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveValue(documentTypeId);
   const original = await (
     await request.get(`${api}/api/test-cases/${caseId}`)
   ).json();
@@ -128,11 +145,12 @@ test("library filters, detail tabs, missing metrics and category history links",
   expect(
     (
       await request.post(`${api}/api/test-cases/${noGT.id}/run`, {
-        data: { pipelines: ["mint", "hutch_crop", "hutch_full"] },
+        data: { pipelines: [cropId, fullId] },
       })
     ).ok(),
   ).toBeTruthy();
   await page.goto("/matrix");
+  await page.getByText("ผลรายชุดทดสอบ", {exact:true}).click();
   const row = page
     .getByRole("table", { name: "เปรียบเทียบรายชุดทดสอบ" })
     .getByRole("row")
@@ -148,15 +166,16 @@ test("all data routes have recoverable errors and intentional empty states", asy
     ["/matrix", "history", "ยังไม่มีผลสำหรับเปรียบเทียบ", []],
     [
       "/analytics/categories",
-      "analytics/categories",
-      "ยังไม่มีข้อมูลเพียงพอสำหรับวิเคราะห์",
+      "history",
+      "ยังไม่มีผลสำหรับเปรียบเทียบ",
       [],
     ],
-    ["/logs", "logs", "ยังไม่มีบันทึกการทำงาน", { total: 0, items: [] }],
+    ["/logs", "logs", "ยังไม่มีบันทึกระบบ", { total: 0, items: [] }],
   ] as const) {
     const pattern = `**/api/${endpoint}*`;
     await page.route(pattern, (r) => r.fulfill({ json: empty }));
     await page.goto(route);
+    if (route === "/matrix" || route === "/analytics/categories") await page.getByText("ผลรายชุดทดสอบ", {exact:true}).click();
     await expect(
       page.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
@@ -198,7 +217,7 @@ test("logs levels, pagination and filters", async ({ page }) => {
     return r.fulfill({ json: { total: level ? 1 : 30, items } });
   });
   await page.goto("/logs");
-  for (const level of ["INFO", "WARNING", "ERROR"])
+  for (const level of ["ข้อมูล", "คำเตือน", "ผิดพลาด"])
     await expect(
       page.getByRole("cell", { name: level, exact: true }),
     ).toBeVisible();
@@ -206,12 +225,12 @@ test("logs levels, pagination and filters", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "ก่อนหน้า", exact: true }),
   ).toBeEnabled();
-  await page.getByLabel("ระดับ", { exact: true }).selectOption("ERROR");
+  await page.getByLabel("ระดับเหตุการณ์", { exact: true }).selectOption("ERROR");
   await expect(
-    page.getByRole("cell", { name: "INFO", exact: true }),
+    page.getByRole("cell", { name: "ข้อมูล", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "ล้างตัวกรอง", exact: true }).click();
-  await expect(page.getByLabel("ระดับ", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("ระดับเหตุการณ์", { exact: true })).toHaveValue("");
 });
 
 test("local loading keeps navigation available and mobile sidebar reaches every route", async ({
@@ -220,7 +239,7 @@ test("local loading keeps navigation available and mobile sidebar reaches every 
   for (const [route, endpoint] of [
     ["/history", "history"],
     ["/matrix", "matrix"],
-    ["/analytics/categories", "analytics/categories"],
+    ["/analytics/categories", "history"],
     ["/logs", "logs"],
     ["/settings/pipelines", "pipelines"],
     [`/test/${caseId}`, `test-cases/${caseId}`],
@@ -250,8 +269,6 @@ test("local loading keeps navigation available and mobile sidebar reaches every 
     "/",
     "/history",
     "/matrix",
-    "/analytics/categories",
-    "/logs",
     "/settings/pipelines",
   ]) {
     await page.locator('[aria-controls="console-navigation"]').click();

@@ -1,9 +1,13 @@
 from datetime import timezone
 
-from app.services.field_service import field_summary
+from app.services.field_service import compare_field, field_summary
+from app.services.global_order import canonical_document_text
 
 
-def field_json(field):
+def field_json(field, detail=False):
+    evaluation = field.evaluation
+    if detail and evaluation:
+        evaluation = {**evaluation, **compare_field(field.ocr_text or "", field.ground_truth_raw or "")}
     return {"id": field.id, "pipeline_run_id": field.pipeline_run_id,
             "global_field_id": field.global_field_id, "status": field.status,
             "diagnostics": field.diagnostics,
@@ -12,7 +16,7 @@ def field_json(field):
             "ground_truth_raw": field.ground_truth_raw,
             "ground_truth_normalized": field.ground_truth_normalized,
             "confirmed_at": timestamp(field.confirmed_at) if field.confirmed_at else None,
-            "evaluation": field.evaluation}
+            "evaluation": evaluation}
 
 
 def global_field_json(field):
@@ -64,7 +68,7 @@ def metrics_json(record):
     return {"cer": record.cer, "wer": record.wer, "exact_match": record.exact_match}
 
 
-def run_json(record):
+def run_json(record, detail=False):
     fields = (
         "id",
         "pipeline_id",
@@ -101,6 +105,13 @@ def run_json(record):
         "crop_stage",
     )
     data = {key: getattr(record, key) for key in fields}
+    data["raw_text"] = record.raw_text if record.raw_text is not None else record.final_text
+    if detail and record.document_evaluation:
+        case = record.test_case
+        prediction = canonical_document_text(case.global_fields, record.fields)
+        data["document_evaluation"] = {**record.document_evaluation,
+            **compare_field(prediction, case.ground_truth_raw or ""),
+            "prediction": prediction, "ground_truth_raw": case.ground_truth_raw}
     metrics = {item.text_kind: metrics_json(item) for item in record.metric_records}
     return {
         **data,
@@ -114,7 +125,7 @@ def run_json(record):
         "created_at": timestamp(record.created_at),
         "metrics": metrics.get("final"),
         "raw_metrics": metrics.get("raw"),
-        "fields": [field_json(field) for field in record.fields],
+        "fields": [field_json(field, detail) for field in record.fields],
         "field_summary": field_summary(record.fields),
     }
 
@@ -132,7 +143,7 @@ def history_status(record):
     return "success" if evaluated else "no_gt"
 
 
-def test_case_json(record):
+def test_case_json(record, detail=False):
     return {
         "id": record.id,
         "document_id": record.document_id,
@@ -157,7 +168,7 @@ def test_case_json(record):
         "created_at": timestamp(record.created_at),
         "updated_at": timestamp(record.updated_at),
         "categories": [category_json(category) for category in record.categories],
-        "runs": [run_json(run) for run in record.runs if not run.archived],
+        "runs": [run_json(run, detail) for run in record.runs if not run.archived],
     }
 
 

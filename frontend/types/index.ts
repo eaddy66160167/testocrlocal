@@ -61,13 +61,24 @@ export type DynamicPipelineInput = {
   paddle_model_defaults?: boolean; det_version?: "5" | "6" | null; rec_version?: "5" | "6" | null;
 };
 export type MatrixRow = {
+  retired?: boolean; min_cer?: number | null; max_cer?: number | null; timed_runs: number;
   pipeline_id: string; pipeline_name: string; tests: number; successful_runs: number;
   failed_runs: number; evaluated_runs: number; cer: number | null; wer: number | null;
   exact_match_rate: number | null; avg_time_ms: number | null; avg_confidence: number | null;
   avg_gateway_time_ms?: number | null;
 };
 export type CategoryAnalytics = { code: string; display_name: string; test_cases: number; pipelines: MatrixRow[] };
-export type QueryFilters = { category?: string; pipeline?: string; date_from?: string; date_to?: string; document?: string; limit?: number; offset?: number };
+export type QueryFilters = { document_type_id?: string; category?: string; pipeline?: string; date_from?: string; date_to?: string; document?: string; limit?: number; offset?: number };
+export type AnalyticsPipeline = { pipeline_id: string; pipeline_name: string; retired: boolean };
+export type AnalyticsSummary = {
+  test_cases: number; history_cases: number; latest_results: number; evaluated_results: number;
+  evaluated_cases: number; evaluated_pipelines: number; coverage: number | null;
+  minimum_samples: number; fastest_progress: number; fastest: MatrixRow | null; lowest_cer_ties: number;
+  lowest_cer: null | {cer: number; pipeline_id: string; pipeline_name: string; retired: boolean;
+    run_id: string; test_case_id: string; filename: string; page_number: number | null;
+    evaluated_at: string; date_source: "evaluation" | "metric" | "run"; evaluation_mode: string; href: string};
+};
+export type AnalyticsGroup = AnalyticsSummary & {code: string; display_name: string; pipelines: MatrixRow[]; best_pipeline: MatrixRow | null};
 export type TestCaseInput = { workflow?: "legacy" | "global"; document_id: string; roi: ROI | null; roi_source?: ROISource; ground_truth_raw: string | null; category_codes: string[]; page_number?: number | null };
 export type RunResponse = { test_case_id: string; runs: PipelineRun[] };
 export type AutoROISuggestion = { id: string; roi: ROI; score: number | null; source: string };

@@ -102,8 +102,8 @@ test("legacy compatibility: Dataset stale-file failure stays actionable and does
   const doc=await (await request.post(`${api}/api/documents`,{multipart:{file:{name:"missing-source.png",mimeType:"image/png",buffer:fs.readFileSync(path.resolve("public/sample-document.png"))}}})).json();
   const c=await (await request.post(`${api}/api/test-cases`,{data:{document_id:doc.id,roi:{x1:10,y1:10,x2:100,y2:100},roi_source:"manual"}})).json();
   await request.put(`${api}/api/test-cases/${c.id}/ground-truth`,{data:{ground_truth_raw:"ไทย",confirmed:true}});
-  await page.goto("/dataset"); await page.getByLabel("Document ID").fill(doc.id);
-  const row=page.locator("tbody tr").filter({hasText:"missing-source.png"});
+  await page.goto("/dataset"); await expect(page.getByLabel("Document ID")).toHaveCount(0);
+  const row=page.locator("tbody tr").filter({has:page.getByRole("checkbox",{name:`เลือก ${c.id}`,exact:true})});
   await row.getByRole("checkbox").check();
   // Reproduce the exact storage failure observed on production, after listing but before export.
   const source=path.resolve("../backend/.pytest_e2e/uploads",doc.storage_key);

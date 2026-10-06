@@ -7,7 +7,7 @@ from starlette.background import BackgroundTask
 from app.api.dependencies import CaseServiceDep, SessionDep
 from app.core.errors import AppError
 from app.db.models import GlobalField, TestCase, now
-from app.schemas.contracts import DatasetExport
+from app.schemas.contracts import BulkDataset, DatasetExport
 from app.services.dataset_service import DatasetService
 
 router = APIRouter(prefix="/dataset")
@@ -23,6 +23,12 @@ def samples(
     offset: int = Query(default=0, ge=0),
 ):
     return DatasetService(service).samples(category, document, limit, offset, document_type)
+
+
+@router.post("/items/bulk-exclude")
+def bulk_exclude(data: BulkDataset, service: CaseServiceDep):
+    return DatasetService(service).bulk_exclude([str(i) for i in data.test_case_ids],
+                                              [str(i) for i in data.global_field_ids])
 
 
 @router.delete("/items/{id}")

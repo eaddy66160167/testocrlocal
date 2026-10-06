@@ -4,9 +4,18 @@ from app.repositories.field_repository import FieldRepository
 from app.services.metrics_service import (
     calculate_metrics,
     error_breakdown,
+    levenshtein,
     normalize_text,
     whitespace_tokenizer,
 )
+
+
+def compact_comparison(prediction, ground_truth):
+    predicted, reference = normalize_text(prediction), normalize_text(ground_truth)
+    return dict(**calculate_metrics(prediction, ground_truth),
+                character_edits=levenshtein(reference, predicted),
+                word_edits=levenshtein(whitespace_tokenizer(reference), whitespace_tokenizer(predicted)),
+                gt_characters=len(reference), gt_words=len(whitespace_tokenizer(reference)))
 
 
 def compare_field(prediction, ground_truth):
@@ -111,7 +120,7 @@ class FieldService:
         field.confirmed_at = now() if data.confirmed else None
         # Replacement JSON snapshot: repeated checks/confirmations cannot append duplicate events.
         field.evaluation = (
-            compare_field(field.ocr_text, data.ground_truth_raw) if data.confirmed else None
+            compact_comparison(field.ocr_text, data.ground_truth_raw) if data.confirmed else None
         )
         field.updated_at = now()
         self.repository.save()

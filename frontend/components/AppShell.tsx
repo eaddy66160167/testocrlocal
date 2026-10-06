@@ -2,12 +2,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useAnalyticsNavigation } from "@/lib/analytics-scope";
 import {
   BarChart3,
   BookOpen,
   FlaskConical,
   History,
-  Layers3,
   Menu,
   ScanLine,
   Settings2,
@@ -17,18 +17,17 @@ const links = [
   { href: "/", label: "ทดสอบ OCR", icon: FlaskConical },
   { href: "/history", label: "ประวัติ", icon: History },
   { href: "/matrix", label: "เปรียบเทียบ", icon: BarChart3 },
-  { href: "/analytics/categories", label: "วิเคราะห์", icon: Layers3 },
   { href: "/dataset", label: "Dataset", icon: BookOpen },
-  { href: "/logs", label: "บันทึกระบบ", icon: BookOpen },
 ];
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const scopedHref = useAnalyticsNavigation();
   const [open, setOpen] = useState(false);
   const detail = pathname.startsWith("/test/");
   const workflow = pathname.startsWith("/workflow/");
   const section =
     links.find((l) => l.href === pathname)?.label ??
-    (workflow ? "ทดสอบ OCR" : detail ? "รายละเอียดชุดทดสอบ" : "ตั้งค่า Pipeline");
+    (pathname === "/logs" ? "บันทึกระบบ" : workflow ? "ทดสอบ OCR" : detail ? "รายละเอียดชุดทดสอบ" : "ตั้งค่า Pipeline");
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -59,7 +58,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             return (
               <Link
                 key={href}
-                href={href}
+                href={scopedHref(href, pathname)}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpen(false)}
                 className={`nav-link ${active ? "active" : ""}`}
