@@ -101,7 +101,7 @@ export default function MatrixPage() {
           </button>
         }
       />
-      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>ภาพรวม</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>แยกตามประเภทเอกสาร</button></div>
+      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div>
       <label className="flex gap-2 items-center"><input type="checkbox" checked={!display.includeArchived} onChange={e=>display.update("include_archived",e.target.checked ? "" : "1")}/>เฉพาะ Pipeline ที่ใช้งานอยู่</label>
       <button className="button secondary self-start" aria-expanded={showFilters || Object.values(filters).some(Boolean)} onClick={()=>setShowFilters(v=>!v)}>ตัวกรองเอกสารและวันที่</button>
       <div hidden={!showFilters && !Object.values(filters).some(Boolean)}><FilterBar
@@ -158,6 +158,7 @@ export default function MatrixPage() {
         !error && (
           <>
             {decision && (display.view === "overall" ? <DecisionOverview data={decision}/> : <ByType data={decision}/>)}
+            <details className="panel panel-body"><summary className="cursor-pointer font-semibold">ผลรายชุดทดสอบ</summary>
             <p className="filter-note">คำแนะนำใช้เอกสารชุดเดียวกันแบบเทียบเป็นคู่ · ตารางด้านล่างเป็นผลรายชุดทดสอบ · ค้นหาและ GT มีผลเฉพาะหน้านี้</p>
             {cases.length ? (
               <section className="panel">
@@ -299,6 +300,7 @@ export default function MatrixPage() {
               · เปรียบเทียบจำนวนตัวอย่างเสมอ โดยเฉพาะเมื่อ Pipeline
               มีผลสำเร็จไม่เท่ากัน
             </p>
+            </details>
           </>
         )
       )}

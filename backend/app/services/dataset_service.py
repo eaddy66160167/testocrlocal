@@ -1,7 +1,10 @@
 from tempfile import SpooledTemporaryFile
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
+from sqlalchemy import select
+
 from app.core.errors import AppError
+from app.db.models import GlobalField, TestCase, now
 from app.repositories.dataset_repository import DatasetRepository
 
 
@@ -40,6 +43,25 @@ class DatasetService:
                 for c in records
             ],
         )
+
+    def bulk_exclude(self, case_ids, field_ids):
+        session = self.repository.session
+        requested = len(set(case_ids)) + len(set(field_ids))
+        found = []
+        try:
+            for model, ids in ((TestCase, set(case_ids)), (GlobalField, set(field_ids))):
+                found.extend(session.scalars(select(model).where(model.id.in_(ids)).with_for_update()))
+            already = sum(r.dataset_excluded_at is not None for r in found)
+            stamp = now()
+            for record in found:
+                if record.dataset_excluded_at is None:
+                    record.dataset_excluded_at = stamp
+            session.commit()
+            return dict(requested=requested, excluded=len(found) - already,
+                        already_excluded=already, not_found=requested - len(found))
+        except Exception:
+            session.rollback()
+            raise
 
     def export(self, ids, global_field_ids=()):
         records = sorted(self.repository.selected(ids) + self.repository.selected_fields(global_field_ids), key=lambda c: (getattr(c, "test_case_id", c.id), getattr(c, "field_index", 0)))

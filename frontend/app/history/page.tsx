@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Plus } from "lucide-react";
-import { getHistory, getAnalyticsPipelines } from "@/lib/api";
+import { getHistory, getAnalyticsPipelines, bulkDeleteTestCases } from "@/lib/api";
 import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
 import { t, userError, pipelineLabel } from "@/lib/i18n/th";
@@ -16,6 +16,8 @@ import {
   LoadingState,
   EmptyState,
 } from "@/components/ConsoleUI";
+import BulkConfirm from "@/components/BulkConfirm";
+import {useManagedSelection} from "@/lib/bulk-selection";
 import DeleteHistoryButton from "@/components/DeleteHistoryButton";
 import { percent } from "@/components/MatrixTable";
 export default function HistoryPage() {
@@ -30,6 +32,8 @@ export default function HistoryPage() {
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
+  const selection=useManagedSelection<string>(JSON.stringify([filters,search,status]), id=>id);
+  const [notice,setNotice]=useState("");
   const invalid = !!(
     filters.date_from &&
     filters.date_to &&
@@ -167,6 +171,9 @@ export default function HistoryPage() {
           </button>
         </div>
       )}
+      {notice&&<p className="notice-banner" role="status">{notice}</p>}
+      {<section className="panel panel-body flex flex-wrap items-center gap-3" aria-label="จัดการประวัติที่เลือก"><strong>เลือกแล้ว {selection.items.length} รายการ</strong><button className="button secondary" disabled={!selection.items.length} onClick={selection.clear}>ล้างการเลือก</button><BulkConfirm count={selection.items.length} kind="history" onConfirm={async()=>{const r=await bulkDeleteTestCases(selection.items);selection.clear();setNotice(`ลบประวัติ ${r.deleted} รายการแล้ว${r.already_missing?` · ไม่พบแล้ว ${r.already_missing} รายการ`:""}`);setRevision(v=>v+1);}}/></section>}
+      <p className="filter-note">เลือกได้สูงสุด 200 รายการ รวมทุกหน้า · เปลี่ยนตัวกรองจะล้างการเลือก</p>
       <section className="panel">
         {loading ? (
           <LoadingState label="กำลังโหลดประวัติ…" />
@@ -186,6 +193,7 @@ export default function HistoryPage() {
                 </caption>
                 <thead>
                   <tr>
+                    <th><input type="checkbox" aria-label="เลือกประวัติที่เห็นในหน้านี้ทั้งหมด" checked={selection.all(visible.map(c=>c.id))} onChange={()=>selection.page(visible.map(c=>c.id))}/></th>
                     {[
                       "เอกสาร / หน้า",
                       "วันที่สร้างชุดทดสอบ (UTC)",
@@ -214,6 +222,7 @@ export default function HistoryPage() {
                           router.push(`/test/${c.id}`);
                       }}
                     >
+                      <td><input type="checkbox" aria-label={`เลือกประวัติ ${c.id}`} checked={selection.has(c.id)} disabled={!selection.has(c.id)&&selection.items.length>=200} onChange={()=>selection.toggle(c.id)}/></td>
                       <td>
                         <Link className="row-title" href={`/test/${c.id}`}>
                           {c.document.filename}

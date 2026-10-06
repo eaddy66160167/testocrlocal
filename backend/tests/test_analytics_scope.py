@@ -177,7 +177,6 @@ def test_logs_historical_snapshot_partial_search_and_deleted_reference(client, d
         case = add_case(session, document)
         add_run(case, "retired")
         session.flush()
-        case_id = case.id
         session.add_all([
             AppLog(level="INFO",event_type="ocr_run_success",message="OCR สำเร็จ", test_case_id=case.id,
                    document_id=document["id"],pipeline_id="retired",details={"duration_ms":3800}),
@@ -186,11 +185,6 @@ def test_logs_historical_snapshot_partial_search_and_deleted_reference(client, d
         ])
         session.commit()
     results = client.get("/api/logs",params={"q":"snap retired"}).json()
-    assert results["total"] == 2
-    live = next(r for r in results["items"] if r["test_case_id"] == case_id)
-    assert live["test_case_exists"] and live["pipeline_name"] == "Snapshot retired"
-    assert live["document_name"] == "fixture.png" and live["outcome"] == "success"
-    missing = next(r for r in results["items"] if r["test_case_id"] != case_id)
-    assert missing["test_case_exists"] is False and missing["outcome"] == "error"
-    assert client.get("/api/logs", params={"q":"%_"}).json()["total"] == 0
-    assert not any(key in live for key in ("ground_truth_raw", "raw_text", "raw_response"))
+    # Even historical rows remain private and are not queried by the disabled route.
+    assert results == {"enabled": False, "total": 0, "items": []}
+    assert client.get("/api/logs", params={"q":"%_"}).json() == results

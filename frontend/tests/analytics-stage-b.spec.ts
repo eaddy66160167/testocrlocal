@@ -37,19 +37,22 @@ async function fixtures(page:Page) {
 
 for(const width of [1440,390])test(`decision support and archived display invariant ${width}`,async({page})=>{
  await fixtures(page);await page.setViewportSize({width,height:1050});await page.goto("/matrix");
- await expect(page.getByRole("tab",{name:"ภาพรวม",exact:true})).toHaveAttribute("aria-selected","true");
+ await expect(page.getByRole("tab",{name:"สรุปผล",exact:true})).toHaveAttribute("aria-selected","true");
  const card=page.getByLabel("คำแนะนำปัจจุบัน");
- await expect(card).toContainText("ยังไม่มี Pipeline ที่ชนะชัดเจน");
- await expect(page.getByLabel("ความพร้อมคู่หลัก")).toContainText("8 / 12 ชุด");
- await expect(page.getByLabel("ผลเทียบคู่หลัก")).toContainText("3 เอกสาร");
- await expect(page.getByLabel("ผลเทียบคู่หลัก")).toContainText("ช่วง 95%");
+ await expect(card).toContainText("ยังตัดสินผู้ชนะไม่ได้");
+ await expect(page.getByTestId("comparison-simple-cards").locator("section")).toHaveCount(3);
+ await expect(card).toContainText("5 เอกสาร");
+ await expect(page.getByTestId("comparison-simple-cards")).toContainText("ยืนยัน Ground Truth อีก 2 ชุด");
+ await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).not.toBeVisible();
  const text=await card.innerText();await page.getByLabel("เฉพาะ Pipeline ที่ใช้งานอยู่",{exact:true}).uncheck();
  await expect(page.locator("main .loading-state")).toHaveCount(0);await expect(card).toHaveText(text,{useInnerText:true});
- await expect(page.locator("main")).toContainText("เก็บถาวร");
+ await expect(page.getByRole("combobox",{name:"Pipeline A",exact:true}).locator("option")).toContainText(["เลือก Pipeline","Active A","Active B","Historical OCR (เก็บถาวร)"]);
  await expect(page.locator('#console-navigation a[href^="/matrix"]')).toHaveCount(1);
  await expect(page.locator('#console-navigation a[href^="/analytics/categories"]')).toHaveCount(0);
+ await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();
  await expect(page.getByRole("link",{name:"synthetic.png",exact:true}).first()).toHaveAttribute("href","/test/saved");
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();await page.evaluate(()=>window.scrollTo(0,0));
  await page.screenshot({path:`../.runtime/comparison-review/local-overall-${width}.png`,fullPage:true});
 });
 
@@ -79,7 +82,9 @@ for(const width of [1440,390])test(`by-type heatmap and legacy redirect ${width}
  await page.goto(`/analytics/categories?document_type_id=${typeId}&pipeline=a&date_from=2026-09-01&date_to=2026-10-01&include_archived=1`);
  await expect.poll(()=>new URL(page.url()).pathname).toBe("/matrix");
  const params=new URL(page.url()).searchParams;expect(params.get("view")).toBe("by-type");expect(params.get("include_archived")).toBe("1");expect(params.get("document_type_id")).toBe(typeId);expect(params.get("pipeline")).toBe("a");expect(params.get("date_from")).toBe("2026-09-01");expect(params.get("date_to")).toBe("2026-10-01");
- await expect(page.getByRole("tab",{name:"แยกตามประเภทเอกสาร",exact:true})).toHaveAttribute("aria-selected","true");
+ await expect(page.getByRole("tab",{name:"ตามประเภทเอกสาร",exact:true})).toHaveAttribute("aria-selected","true");
+ await expect(page.getByLabel("คำแนะนำตามประเภทเอกสาร")).toContainText("ทุกประเภท");
+ await page.getByText("ดูตารางทุก Pipeline",{exact:true}).click();
  const heatmap=page.getByRole("table",{name:"เปรียบเทียบตามประเภทเอกสาร",exact:true});await expect(heatmap).toContainText("ทุกประเภท");await expect(heatmap).toContainText("ไม่ระบุประเภท");await expect(heatmap).toContainText("n=5");await expect(heatmap).not.toContainText("★");await expect(heatmap).toContainText("ยังไม่มีผู้ชนะชัดเจน");
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
  await page.screenshot({path:`../.runtime/comparison-review/local-by-type-${width}.png`,fullPage:true});
@@ -102,9 +107,9 @@ for(const route of ["/history","/matrix","/analytics/categories","/dataset"])tes
  expect(requested.some(url=>["/api/categories","/api/analytics/categories"].includes(url.pathname))).toBeFalsy();
  if(route==="/dataset"){
   await expect(page.getByRole("checkbox").first()).toBeEnabled();
-  await expect(page.getByRole("checkbox").last()).toBeDisabled();
+  await expect(page.getByRole("checkbox").last()).toBeEnabled();
   await page.getByRole("checkbox").first().check();
-  await expect(page.getByRole("button",{name:"ส่งออก ZIP (1)"})).toBeEnabled();
+  await expect(page.getByRole("button",{name:"ส่งออก ZIP (1 ที่พร้อม)"})).toBeEnabled();
   await page.screenshot({path:"../.runtime/simplification-after/local-dataset-1440.png",fullPage:true});
  }
  if(route==="/history")await page.screenshot({path:"../.runtime/simplification-after/local-history-1440.png",fullPage:true});
@@ -114,6 +119,7 @@ test("failed OCR uses a readable state without developer log navigation",async({
  await fixtures(page);
  await page.route("**/api/history*",route=>route.fulfill({json:[{...caseRecord,runs:[{...caseRecord.runs[0],status:"error"}]}]}));
  await page.goto("/matrix?include_archived=1");
+ await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();
  await expect(page.getByRole("table",{name:"เปรียบเทียบรายชุดทดสอบ"})).toContainText("ประมวลผลไม่สำเร็จ");
  await expect(page.locator('main a[href^="/logs"]')).toHaveCount(0);
  await expect(page.locator('main')).not.toContainText("request_id");
@@ -134,6 +140,23 @@ test("human logs expand technical details and deleted references have no broken 
 test("clear recommendation copy and Pareto absent on unmatched cohorts",async({page})=>{
  await fixtures(page);const data=decisionFixture();data.overall.recommendation="a";data.overall.featured_pair={...pair,winner:"a",verdict:"clear",ci95_pp:[-2,-.5]};data.overall.pairs=[data.overall.featured_pair];data.overall.scatter.pareto_valid=false;data.overall.scatter.cohort_mode="own";
  await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:data}));await page.goto("/matrix");
- await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("แนะนำตอนนี้");await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("Active A");await expect(page.locator("main")).toContainText("ชุดเอกสารไม่ตรงกัน เทียบกันตรง ๆ ไม่ได้");await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);
- await page.getByRole("tab",{name:"แยกตามประเภทเอกสาร",exact:true}).click();await expect.poll(()=>new URL(page.url()).searchParams.get("view")).toBe("by-type");
+ await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("แนะนำตอนนี้");await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("Active A");await page.getByText("รายละเอียดเพิ่มเติม",{exact:true}).click();await page.getByText("ความแม่นยำ × เวลา",{exact:true}).first().click();await expect(page.locator("main")).toContainText("ชุดเอกสารไม่ตรงกัน เทียบกันตรง ๆ ไม่ได้");await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);
+ await page.getByRole("tab",{name:"ตามประเภทเอกสาร",exact:true}).click();await expect.poll(()=>new URL(page.url()).searchParams.get("view")).toBe("by-type");
+});
+
+test("manual pair only changes inspection and never system decision",async({page})=>{
+ await fixtures(page);await page.goto("/matrix");const hero=page.getByTestId("comparison-hero"),before=await hero.innerText();
+ await page.getByRole("combobox",{name:"Pipeline A",exact:true}).selectOption("b");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("เลือก Pipeline คนละตัว");await expect(hero).toHaveText(before,{useInnerText:true});
+ await page.getByRole("combobox",{name:"Pipeline B",exact:true}).selectOption("a");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("สูสี ยังสรุปไม่ได้");await expect(hero).toHaveText(before,{useInnerText:true});
+ await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).not.toBeVisible();await page.getByText("ดูหลักฐานเชิงสถิติ",{exact:true}).click();await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).toContainText("5 / 8");
+});
+for(const width of [1440,390])test(`fresh Comparison has honest empty state ${width}`,async({page})=>{
+ await fixtures(page);const data=decisionFixture();data.latest_results=0;data.pipelines=[];data.overall={...data.overall,recommendation:null,ranking:[],featured_pair:null,pairs:[],historical_pairs:[],documents:0,cells:[]};
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:data}));await page.route("**/api/history*",r=>r.fulfill({json:[]}));await page.setViewportSize({width,height:1050});await page.goto("/matrix");
+ await expect(page.getByTestId("comparison-hero")).toContainText("ยังไม่มีข้อมูลสำหรับเปรียบเทียบ");await expect(page.getByTestId("comparison-hero")).toContainText("เริ่มจากทดสอบ OCR และยืนยัน Ground Truth");await expect(page.getByTestId("comparison-simple-cards").locator("section")).toHaveCount(3);
+ await expect(page.getByRole("img",{name:"กราฟ CER เฉลี่ยกับเวลาเฉลี่ยต่อชุดทดสอบ"})).toHaveCount(0);await expect(page.locator("main")).not.toContainText(/NaN|undefined|0\/0/);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+});
+test("System Logs explicitly reports disabled persistence",async({page})=>{
+ await fixtures(page);await page.route("**/api/logs*",r=>r.fulfill({json:{enabled:false,total:0,items:[]}}));await page.goto("/logs");await expect(page.locator("main")).toContainText("ไม่ได้เปิดการบันทึก System Logs ลงฐานข้อมูล");await expect(page.locator("tbody tr")).toHaveCount(0);
 });

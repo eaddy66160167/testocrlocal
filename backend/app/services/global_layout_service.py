@@ -1,12 +1,12 @@
-import asyncio
 """Canonical layout/GT identities and explicitly evaluated prediction snapshots."""
 
+import asyncio
 from statistics import fmean
 
 from app.core.errors import AppError
 from app.db.models import GlobalField, Metric, OCRField, PipelineRun, now
 from app.schemas.contracts import GlobalEvaluation
-from app.services.field_service import compare_field, field_summary
+from app.services.field_service import compact_comparison, field_summary
 from app.services.global_order import canonical_document_text, reading_order
 from app.services.metrics_service import normalize_text
 from app.services.pipeline_manager import PipelineManager
@@ -191,10 +191,8 @@ class GlobalLayoutService:
             for run in valid:
                 prediction = canonical_document_text(case.global_fields, run.fields)
                 run.document_evaluation = {
-                    **compare_field(prediction, case.ground_truth_raw),
+                    **compact_comparison(prediction, case.ground_truth_raw),
                     "mode": "whole_document",
-                    "prediction": prediction,
-                    "ground_truth_raw": case.ground_truth_raw,
                     "global_field_ids": [
                         f.id for f in sorted(case.global_fields, key=lambda f: f.field_index)
                     ],
@@ -227,7 +225,7 @@ class GlobalLayoutService:
                     prediction.ground_truth_normalized = field.ground_truth_normalized
                     prediction.confirmed_at = stamp
                     prediction.evaluation = {
-                        **compare_field(prediction.ocr_text, field.ground_truth_raw),
+                        **compact_comparison(prediction.ocr_text, field.ground_truth_raw),
                         "mode": "per_field",
                         "global_field_id": field.id,
                         "evaluated_at": stamp.isoformat(),
@@ -255,11 +253,12 @@ class GlobalLayoutService:
                 status="success",
                 crop_stage="global_fields",
                 boxes=[],
-                raw_response={"global_fields": []},
+                raw_response=None,
                 fields=[],
             )
             for c in configs
         }
+        raw_parts = {c.pipeline_id: [] for c in configs}
         with self.cases.images.open(source) as image:
             manager = PipelineManager(self.cases.settings)
             fields = sorted(case.global_fields, key=lambda field: field.field_index)
@@ -298,11 +297,9 @@ class GlobalLayoutService:
                             "original_height",
                         )
                         diagnostics = {key: getattr(result, key) for key in trace_keys}
+                        raw_parts[result.pipeline_id].append(result.raw_text if result.raw_text is not None else result.final_text or "")
                         diagnostics.update(
                             boxes=result.boxes,
-                            raw_text=result.raw_text,
-                            raw_response=result.raw_response,
-                            reading_lines=lines,
                             ordering="top_then_left_within_global_field",
                         )
                         parent.fields.append(
@@ -319,12 +316,13 @@ class GlobalLayoutService:
                         if result.status != "success":
                             parent.status, parent.error_code = "error", "FIELD_PIPELINE_ERROR"
                             parent.error_message = "One or more fields failed; successful field predictions remain available"
-                        parent.raw_response["global_fields"].append(
-                            {"global_field_id": field.id, "response": result.raw_response}
-                        )
+                        if parent.raw_response is None:
+                            parent.raw_response = result.raw_response
         for parent in parents.values():
-            parent.raw_text = "\n".join(f.diagnostics.get("raw_text") or "" for f in parent.fields)
+            parent.raw_text = "\n".join(raw_parts[parent.pipeline_id])
             parent.final_text = canonical_document_text(case.global_fields, parent.fields)
+            if parent.raw_text == parent.final_text:
+                parent.raw_text = None
             parent.normalized_text = normalize_text(parent.final_text)
             confidences = [f.confidence for f in parent.fields if f.confidence is not None]
             parent.confidence = fmean(confidences) if confidences else None

@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import BulkConfirm from "@/components/BulkConfirm";
+import {useManagedSelection} from "@/lib/bulk-selection";
 import * as api from "@/lib/api";
 import type { DocumentType } from "@/types";
 import { userError } from "@/lib/i18n/th";
@@ -18,7 +20,10 @@ export default function DatasetPage() {
   const removeDialog=useRef<HTMLDialogElement>(null);
   useEffect(()=>{if(removing)removeDialog.current?.showModal();else removeDialog.current?.close();},[removing]);
   useEffect(() => { removeInternalUserFilters(); }, []);
-  const [selected, setSelected] = useState<string[]>([]);
+  const sampleKey=(s:api.DatasetSample)=>s.global_field_id?`field:${s.id}`:s.id;
+  const selection=useManagedSelection<api.DatasetSample>(documentType,sampleKey);
+  const selected=selection.items.map(sampleKey);
+  const exportable=selection.items.filter(s=>s.source_available!==false).map(sampleKey);
   const [offset, setOffset] = useState(0),
     [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true),
@@ -60,13 +65,13 @@ export default function DatasetPage() {
       active = false;
     };
   }, [documentType, offset, revision]);
-  async function remove(){if(!removing)return;setRemoveBusy(true);try{await api.excludeDatasetSample(removing.id,removing.global_field_id?"field":"case");setSelected(old=>old.filter(id=>id!==removing.id&&id!==`field:${removing.id}`));setRemoving(null);setRevision(v=>v+1);}catch(e){setError(userError(e instanceof Error?e.message:"ลบไม่สำเร็จ"));}finally{setRemoveBusy(false);}}
+  async function remove(){if(!removing)return;setRemoveBusy(true);try{await api.excludeDatasetSample(removing.id,removing.global_field_id?"field":"case");selection.clear();setRemoving(null);setRevision(v=>v+1);}catch(e){setError(userError(e instanceof Error?e.message:"ลบไม่สำเร็จ"));}finally{setRemoveBusy(false);}}
   async function download() {
     setExporting(true);
     setError("");
     setNotice("");
     try {
-      const blob = await api.exportDataset(selected);
+      const blob = await api.exportDataset(exportable);
       const url = URL.createObjectURL(blob),
         anchor = document.createElement("a");
       anchor.href = url;
@@ -75,7 +80,7 @@ export default function DatasetPage() {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice(`ส่งออก ${selected.length} ตัวอย่างแล้ว`);
+      setNotice(`ส่งออก ${exportable.length} ตัวอย่างแล้ว`);
     } catch (e) {
       setError(userError(e instanceof Error ? e.message : "ส่งออกไม่สำเร็จ"));
     } finally {
@@ -90,22 +95,22 @@ export default function DatasetPage() {
         actions={
           <button
             className="button primary"
-            disabled={loading || exporting || !selected.length}
+            disabled={loading || exporting || !exportable.length}
             onClick={() => void download()}
           >
-            {exporting ? "กำลังส่งออก…" : `ส่งออก ZIP (${selected.length})`}
+            {exporting ? "กำลังส่งออก…" : `ส่งออก ZIP (${exportable.length} ที่พร้อม)`}
           </button>
         }
       />
       <section className="panel panel-body">
         <div className="flex flex-wrap items-end gap-3">
-          <label>ประเภทเอกสาร (ธุรกิจ)<select aria-label="ประเภทเอกสาร (ธุรกิจ)" className="select" value={documentType} onChange={e=>{setDocumentType(e.target.value);setOffset(0);setSelected([]);}}><option value="">ทั้งหมด</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label>ประเภทเอกสาร (ธุรกิจ)<select aria-label="ประเภทเอกสาร (ธุรกิจ)" className="select" value={documentType} onChange={e=>{setDocumentType(e.target.value);setOffset(0);selection.clear();}}><option value="">ทั้งหมด</option>{types.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
           <button
             className="button secondary"
             disabled={loading || exporting}
             onClick={() => {
               setRevision((n) => n + 1);
-              setSelected([]);
+              selection.clear();
             }}
           >
             รีเฟรช
@@ -113,7 +118,7 @@ export default function DatasetPage() {
           <button
             className="button secondary"
             disabled={exporting || !selected.length}
-            onClick={() => setSelected([])}
+            onClick={() => selection.clear()}
           >
             ล้างการเลือก
           </button>
@@ -128,6 +133,7 @@ export default function DatasetPage() {
           โดยรักษาข้อความเดิม
         </p>
       </section>
+      <section className="panel panel-body flex flex-wrap items-center gap-3" aria-label="จัดการตัวอย่างที่เลือก"><strong>เลือกแล้ว {selected.length} รายการ · พร้อมส่งออก {exportable.length}</strong><BulkConfirm count={exporting?0:selected.length} kind="dataset" onConfirm={async()=>{const r=await api.bulkExcludeDataset(selected);selection.clear();setRevision(v=>v+1);setNotice(`นำ ${r.excluded} ตัวอย่างออกจาก Dataset แล้ว · ออกอยู่แล้ว ${r.already_excluded} · ไม่พบ ${r.not_found}`);}}/></section>
       {notice && (
         <div className="notice-banner" role="status">
           {notice}
@@ -148,13 +154,7 @@ export default function DatasetPage() {
               <button
                 className="button small"
                 disabled={exporting}
-                onClick={() =>
-                  setSelected((old) =>
-                    Array.from(
-                      new Set([...old, ...data.items.filter(s => s.source_available !== false).map((s) => s.global_field_id ? `field:${s.id}` : s.id)]),
-                    ).slice(0, 200),
-                  )
-                }
+                onClick={() => selection.page(data.items)}
               >
                 เลือกหน้านี้
               </button>
@@ -163,7 +163,7 @@ export default function DatasetPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>เลือก</th>
+                    <th><input type="checkbox" aria-label="เลือกตัวอย่างในหน้านี้ทั้งหมด" checked={selection.all(data.items)} disabled={exporting} onChange={()=>selection.page(data.items)}/></th>
                     <th>ภาพ ROI</th>
                     <th>ต้นฉบับ</th>
                     <th>Confirmed Ground Truth</th>
@@ -179,17 +179,11 @@ export default function DatasetPage() {
                           aria-label={`เลือก ${sample.id}`}
                           checked={selected.includes(sample.global_field_id ? `field:${sample.id}` : sample.id)}
                           disabled={
-                            exporting || sample.source_available === false ||
+                            exporting ||
                             (!selected.includes(sample.global_field_id ? `field:${sample.id}` : sample.id) &&
                               selected.length >= 200)
                           }
-                          onChange={(e) =>
-                            setSelected((old) =>
-                              e.target.checked
-                                ? [...old, sample.global_field_id ? `field:${sample.id}` : sample.id]
-                                : old.filter((id) => id !== (sample.global_field_id ? `field:${sample.id}` : sample.id)),
-                            )
-                          }
+                          onChange={()=>selection.toggle(sample)}
                         />
                       </td>
                       <td>
@@ -225,7 +219,7 @@ export default function DatasetPage() {
                             "(ข้อความว่างที่ยืนยันแล้ว)"}
                         </div>
                       </td>
-                      <td><button className="button small secondary" disabled={exporting} onClick={()=>setRemoving(sample)}>ลบออกจาก Dataset</button></td>
+                      <td><button className="button small secondary" disabled={exporting} onClick={()=>setRemoving(sample)}>นำออกจาก Dataset</button></td>
                     </tr>
                   ))}
                 </tbody>

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from app.api.dependencies import CaseServiceDep, RepoDep, SessionDep
 from app.schemas.contracts import (
     BenchmarkFilters,
+    BulkCases,
     CategoriesUpdate,
     EvaluationMode,
     FieldCheck,
@@ -25,9 +26,15 @@ from app.services.serializers import field_json, run_json, test_case_json
 router = APIRouter(prefix="/test-cases")
 
 
+@router.post("/bulk-delete")
+async def bulk_delete(data: BulkCases, service: CaseServiceDep, request: Request):
+    async with request.app.state.ocr_lock:
+        return service.bulk_delete([str(i) for i in data.test_case_ids])
+
+
 @router.get("/{case_id}/global-fields")
 def global_layout(case_id: UUID, repository: RepoDep):
-    return test_case_json(repository.test_case(str(case_id)))
+    return test_case_json(repository.test_case(str(case_id)), detail=True)
 
 
 @router.put("/{case_id}/global-fields")
@@ -47,7 +54,7 @@ def global_mode(case_id: UUID, data: EvaluationMode, service: CaseServiceDep):
 
 @router.post("/{case_id}/evaluate")
 def evaluate_global(case_id: UUID, data: GlobalEvaluation, service: CaseServiceDep):
-    return test_case_json(GlobalLayoutService(service).evaluate(str(case_id), data))
+    return test_case_json(GlobalLayoutService(service).evaluate(str(case_id), data), detail=True)
 
 
 @router.post("", status_code=201)
@@ -67,7 +74,7 @@ def list_test_cases(
 
 @router.get("/{case_id}")
 def get_test_case(case_id: UUID, repository: RepoDep):
-    return test_case_json(repository.test_case(str(case_id)))
+    return test_case_json(repository.test_case(str(case_id)), detail=True)
 
 
 @router.put("/{case_id}")
@@ -87,7 +94,7 @@ def update_roi(case_id: UUID, data: ROIUpdate, service: CaseServiceDep):
 
 @router.get("/{case_id}/runs/{run_id}/fields")
 def fields(case_id: UUID, run_id: UUID, session: SessionDep):
-    return [field_json(field) for field in FieldService(session).list_fields(str(case_id), str(run_id))]
+    return [field_json(field, detail=True) for field in FieldService(session).list_fields(str(case_id), str(run_id))]
 
 
 @router.post("/{case_id}/runs/{run_id}/fields/{field_id}/check")
@@ -97,7 +104,7 @@ def check_field(case_id: UUID, run_id: UUID, field_id: UUID, data: FieldCheck, s
 
 @router.put("/{case_id}/runs/{run_id}/fields/{field_id}/ground-truth")
 def field_ground_truth(case_id: UUID, run_id: UUID, field_id: UUID, data: GroundTruthUpdate, session: SessionDep):
-    return field_json(FieldService(session).update(str(case_id), str(run_id), str(field_id), data))
+    return field_json(FieldService(session).update(str(case_id), str(run_id), str(field_id), data), detail=True)
 
 
 @router.put("/{case_id}/categories")
@@ -127,5 +134,5 @@ async def delete_test_case(case_id: UUID, service: CaseServiceDep, request: Requ
 def get_results(case_id: UUID, repository: RepoDep):
     return {
         "test_case_id": str(case_id),
-        "runs": [run_json(run) for run in repository.test_case(str(case_id)).runs if not run.archived],
+        "runs": [run_json(run, detail=True) for run in repository.test_case(str(case_id)).runs if not run.archived],
     }

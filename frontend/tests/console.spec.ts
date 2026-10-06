@@ -122,6 +122,7 @@ test("business library filters, detail tabs, missing metrics and history links",
   await page.goto("/analytics/categories");
   await page.getByRole("button", { name: "ตัวกรองเอกสารและวันที่", exact: true }).click();
   await page.getByLabel("ประเภทเอกสาร (ธุรกิจ)").selectOption(documentTypeId);
+  await page.getByText("ดูตารางทุก Pipeline", {exact:true}).click();
   await expect(
     page.getByRole("table", { name: "เปรียบเทียบตามประเภทเอกสาร", exact: true }),
   ).toBeVisible();
@@ -149,6 +150,7 @@ test("business library filters, detail tabs, missing metrics and history links",
     ).ok(),
   ).toBeTruthy();
   await page.goto("/matrix");
+  await page.getByText("ผลรายชุดทดสอบ", {exact:true}).click();
   const row = page
     .getByRole("table", { name: "เปรียบเทียบรายชุดทดสอบ" })
     .getByRole("row")
@@ -173,6 +175,7 @@ test("all data routes have recoverable errors and intentional empty states", asy
     const pattern = `**/api/${endpoint}*`;
     await page.route(pattern, (r) => r.fulfill({ json: empty }));
     await page.goto(route);
+    if (route === "/matrix" || route === "/analytics/categories") await page.getByText("ผลรายชุดทดสอบ", {exact:true}).click();
     await expect(
       page.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();

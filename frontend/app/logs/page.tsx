@@ -9,6 +9,7 @@ import { PageHeader, FilterBar, LoadingState, EmptyState } from "@/components/Co
 const levels = {INFO: {label:"ข้อมูล", tone:"neutral", Icon:Info}, WARNING:{label:"คำเตือน",tone:"warning",Icon:AlertTriangle}, ERROR:{label:"ผิดพลาด",tone:"error",Icon:CircleX}};
 const outcomes: Record<string,string> = {error:"ไม่สำเร็จ", started:"เริ่มดำเนินการ", success:"สำเร็จ", recorded:"บันทึกแล้ว"};
 export default function LogsPage() {
+  const [enabled,setEnabled]=useState(true);
   const [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]);
   const [filters, setFilters] = useState<Record<string,string>>({});
   const [offset,setOffset] = useState(0), [revision,setRevision] = useState(0);
@@ -28,7 +29,7 @@ export default function LogsPage() {
       for(const [key,value] of Object.entries(filters)) if(value) q.set(key,key.startsWith("date_") ? new Date(value).toISOString() : value);
       try {
         const [data,options] = await Promise.all([getLogs(q), getAnalyticsPipelines()]);
-        if(active) {setItems(data.items);setTotal(data.total);setPipelines(options);}
+        if(active) {setEnabled(data.enabled!==false);setItems(data.items);setTotal(data.total);setPipelines(options);}
       } catch {if(active) setError("ไม่สามารถโหลดบันทึกระบบได้ กรุณาตรวจการเชื่อมต่อ Backend");}
       finally {if(active) setLoading(false);}
     }
@@ -46,6 +47,7 @@ export default function LogsPage() {
   return <div className="page-stack">
     <PageHeader title="บันทึกระบบ" description="ดูเหตุการณ์ระบบและข้อผิดพลาด เพื่อค้นหาสาเหตุและเปิดชุดทดสอบที่เกี่ยวข้อง"
       actions={<button className="button secondary" disabled={loading} onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>รีเฟรช</button>}/>
+    {!enabled&&<p role="status" className="notice-banner">ไม่ได้เปิดการบันทึก System Logs ลงฐานข้อมูล</p>}
     <FilterBar count={Object.values(filters).filter(Boolean).length + Number(!!caseId)} onClear={clear}>
       <label className="field">ระดับเหตุการณ์<select aria-label="ระดับเหตุการณ์" className="select" value={filters.level||""} onChange={e=>filter("level",e.target.value)}>
         <option value="">ทุกระดับ</option>{Object.entries(levels).map(([key,value])=><option key={key} value={key}>{value.label}</option>)}

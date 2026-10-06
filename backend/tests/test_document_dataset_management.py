@@ -71,11 +71,11 @@ def test_recent_dataset_exclusion_preserves_gt_source_history(client, document):
     assert client.get(old_root).status_code == 200
 
 
-def test_logs_partial_multilingual_search(client, document):
+def test_disabled_logs_accept_multilingual_filters(client, document):
     evaluated(client, document)
     for query in ("HUTCH", "fine", "hutch fine", "fixture", "สำเร็", "ocr สำเร็จ"):
         data = client.get("/api/logs", params={"q": query}).json()
-        assert data["total"] > 0, query
+        assert data == {"enabled": False, "total": 0, "items": []}, query
     assert client.get("/api/logs", params={"q": "no-such-file-XYZ"}).json()["total"] == 0
     assert client.get("/api/logs", params={"q": "%_"}).json()["total"] == 0
 

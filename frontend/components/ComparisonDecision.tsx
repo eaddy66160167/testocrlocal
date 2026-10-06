@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import {useState} from "react";
 import type {Comparison,Decision,Identity,Pair} from "@/types/comparison";
 import {percent} from "@/components/MatrixTable";
 
@@ -15,25 +16,49 @@ export function PairDetail({decision,identities}:{decision:Decision;identities:I
 function PairTable({pairs,identities}:{pairs:Pair[];identities:Identity[]}){
  return <div className="table-wrap" tabIndex={0}><table className="data-table" aria-label="หลักฐานการเทียบคู่"><thead><tr>{["คู่ Pipeline","เอกสาร / ชุด","CER A / B","ส่วนต่าง A − B (pp)","ช่วง 95% (pp)","A ชนะ / เสมอ / B ชนะ","ข้อสรุป"].map(t=><th key={t}>{t}</th>)}</tr></thead><tbody>{pairs.map(p=><tr key={`${p.a}:${p.b}`}><td>{nameOf(p.a,identities)} ↔ {nameOf(p.b,identities)}{(!identities.find(i=>i.pipeline_id===p.a)?.active||!identities.find(i=>i.pipeline_id===p.b)?.active)&&<span className="badge neutral">เก็บถาวร</span>}</td><td>{p.documents} / {p.test_cases}</td><td>{percent(p.mean_cer_a)} / {percent(p.mean_cer_b)}</td><td>{number(p.mean_dcer_pp)}</td><td>{p.ci95_pp?p.ci95_pp.map(number).join(" ถึง "):"—"}</td><td>{p.wins} / {p.ties} / {p.losses}</td><td>{verdict(p,identities)}</td></tr>)}</tbody></table>{!pairs.length&&<p className="filter-note">ต้องมี Pipeline ที่ใช้งานอยู่อย่างน้อยสองตัวเพื่อเทียบเป็นคู่</p>}</div>;
 }
+function nextActions(data:Comparison){
+ const r=data.overall.readiness, actions:string[]=[];
+ const missingGT=r.valid_pair?r.reasons.missing_gt:data.actions.missing_gt;
+ if(missingGT)actions.push(`ยืนยัน Ground Truth อีก ${missingGT} ชุด`);
+ if(r.reasons.not_run)actions.push(`รันคู่หลักให้ครบอีก ${r.reasons.not_run} ชุด`);
+ if(r.reasons.failed)actions.push(`ตรวจผลรันไม่สำเร็จ ${r.reasons.failed} ชุด`);
+ if(!r.valid_pair){for(const a of data.actions.missing_runs.filter(a=>a.count))actions.push(`รัน ${a.pipeline_name} เพิ่มใน ${a.count} ชุด`);for(const a of data.actions.failed_runs.filter(a=>a.count))actions.push(`ตรวจผลรันไม่สำเร็จของ ${a.pipeline_name} ${a.count} ชุด`);}
+ const p=data.overall.featured_pair;
+ if(p && p.documents<data.minimum_documents)actions.push(`เพิ่มเอกสารที่ทั้งคู่มีผลยืนยันอีก ${data.minimum_documents-p.documents} เอกสาร`);
+ for(const t of data.actions.short_types)actions.push(`${t.name}: เพิ่มเอกสารที่ประเมินแล้วอีก ${t.needed} เอกสาร และรันให้ครบคู่`);
+ if(data.actions.largest_spread.length)actions.push(`ตรวจชุดที่ผลต่างกันมาก ${data.actions.largest_spread.length} ชุด`);
+ if(data.actions.hardest.length)actions.push(`ตรวจชุดที่ยังอ่านได้ยาก ${data.actions.hardest.length} ชุด`);
+ return actions;
+}
+function ManualPair({data}:{data:Comparison}){
+ const d=data.overall, pairs=[...d.pairs,...d.historical_pairs];
+ const [chosen,setChosen]=useState<[string,string]|null>(null);
+ const a=chosen?.[0]??d.featured_pair?.a??data.pipelines[0]?.pipeline_id??"";
+ const b=chosen?.[1]??d.featured_pair?.b??data.pipelines.find(i=>i.pipeline_id!==a)?.pipeline_id??"";
+ const pair=pairs.find(p=>(p.a===a&&p.b===b)||(p.a===b&&p.b===a));
+ const historical=pair&&d.historical_pairs.includes(pair);
+ return <section className="panel panel-body" aria-label="เปรียบเทียบสอง Pipeline โดยตรง"><h2 className="text-lg font-semibold">เปรียบเทียบสอง Pipeline โดยตรง</h2>
+ <div className="flex flex-wrap gap-3 items-end my-3"><label className="field min-w-0 flex-1">Pipeline A<select className="input" value={a} onChange={e=>setChosen([e.target.value,b])}><option value="">เลือก Pipeline</option>{data.pipelines.map(i=><option key={i.pipeline_id} value={i.pipeline_id}>{i.pipeline_name}{i.active?"":" (เก็บถาวร)"}</option>)}</select></label><span>VS</span><label className="field min-w-0 flex-1">Pipeline B<select className="input" value={b} onChange={e=>setChosen([a,e.target.value])}><option value="">เลือก Pipeline</option>{data.pipelines.map(i=><option key={i.pipeline_id} value={i.pipeline_id}>{i.pipeline_name}{i.active?"":" (เก็บถาวร)"}</option>)}</select></label></div>
+ {historical&&<p className="badge neutral">ข้อมูลในอดีต — ไม่ใช้แนะนำตอนนี้</p>}
+ <p className="font-semibold">{a===b?"เลือก Pipeline คนละตัว":pair?verdict(pair,data.pipelines):"ยังไม่มีข้อมูลคู่นี้สำหรับเปรียบเทียบ"}</p>
+ {pair&&<><p>เทียบตรงกัน {pair.documents} เอกสาร · {pair.test_cases} ชุดทดสอบ</p><details className="mt-3"><summary className="cursor-pointer">ดูหลักฐานเชิงสถิติ</summary><PairTable pairs={[pair]} identities={data.pipelines}/></details></>}
+ <p className="filter-note">การเลือกคู่นี้ใช้ตรวจผลเท่านั้น ไม่เปลี่ยนคำแนะนำของระบบ</p></section>;
+}
 export function DecisionOverview({data}:{data:Comparison}){
- const d=data.overall,r=d.readiness,p=d.featured_pair;
- const leader=d.ranking[0], recommended=d.recommendation;
- const leaderCer=p?(p.a===leader?.pipeline_id?p.mean_cer_a:p.mean_cer_b):null;
+ const d=data.overall,r=d.readiness,p=d.featured_pair,leader=d.ranking[0];
+ const leaderCer=p&&leader?(p.a===leader.pipeline_id?p.mean_cer_a:p.b===leader.pipeline_id?p.mean_cer_b:null):null;
+ const empty=data.latest_results===0, actions=nextActions(data), next=empty?"เริ่มทดสอบ OCR และยืนยัน Ground Truth":actions[0]??"ตรวจผลรายชุดทดสอบ และเพิ่มเอกสารที่เทียบตรงกัน";
  return <>
- <section className="panel panel-body" aria-label="ความพร้อมคู่หลัก"><h2 className="text-lg font-semibold">{r.valid_pair?`ข้อมูลพร้อมเทียบคู่หลัก ${r.x} / ${r.y} ชุด`:"ยังไม่มีคู่ที่เทียบได้"}</h2>
- {p?<><p>{nameOf(p.a,data.pipelines)} ↔ {nameOf(p.b,data.pipelines)}</p><p>{r.x} ชุดทดสอบ จาก {r.documents} เอกสาร · มี GT และผลที่ใช้เทียบได้จากทั้งสอง Pipeline</p><p className="filter-note">Ground Truth (GT) คือข้อความถูกต้องที่ผู้ใช้ยืนยัน · ที่เหลือ {r.y-r.x} ชุด: ยังไม่มี GT ยืนยัน {r.reasons.missing_gt} · ยังไม่ได้รันคู่หลัก {r.reasons.not_run} · รันไม่สำเร็จ {r.reasons.failed} · ไม่เข้าเกณฑ์อื่น {r.reasons.other}</p></>:<p>{r.reason}</p>}</section>
- <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
- <section className="panel panel-body" aria-label="คำแนะนำปัจจุบัน"><h2 className="text-xl font-semibold">{recommended?"แนะนำตอนนี้":"ยังไม่มี Pipeline ที่ชนะชัดเจน"}</h2><p className="mt-3 font-semibold">{recommended?nameOf(recommended,data.pipelines):leader?`ผู้นำเชิงตัวเลข: ${leader.pipeline_name}`:"ยังไม่มี Pipeline ที่ใช้งานอยู่ในขอบเขตนี้"}</p>{p&&<p>CER เฉลี่ย {percent(leaderCer)} · {p.documents} เอกสาร / {p.test_cases} ชุด · ยิ่งต่ำยิ่งดี</p>}{!recommended&&<p className="filter-note">ยังสรุปไม่ได้จากหลักฐานปัจจุบัน ต้องมีคะแนนนำเพียงตัวเดียว ไม่แพ้ชัดเจนให้คู่ใด และชนะอันดับสองชัดเจน</p>}<p className="mt-2 font-semibold">ขั้นต่อไป: {r.reasons.missing_gt>0?`ยืนยัน GT เพิ่ม ${r.reasons.missing_gt} ชุด`:r.reasons.not_run>0?`รันคู่หลักให้ครบอีก ${r.reasons.not_run} ชุด`:r.reasons.failed>0?`ตรวจผลรันไม่สำเร็จ ${r.reasons.failed} ชุด`:"ดูหลักฐานคู่และเพิ่มเอกสารที่ทั้งคู่มีผลยืนยัน"}</p><a className="button secondary mt-3" href="#comparison-pairs">ดูรายละเอียดการเทียบ</a></section>
- <section className="panel panel-body" aria-label="ผลเทียบคู่หลัก"><h2 className="text-lg font-semibold">เทียบกันตรง ๆ บนเอกสารชุดเดียวกัน</h2>{p?<><p className="mt-3">{nameOf(p.a,data.pipelines)} ดีกว่า {p.wins} เอกสาร · เสมอ {p.ties} · {nameOf(p.b,data.pipelines)} ดีกว่า {p.losses}</p><p>ส่วนต่าง CER (A − B) {number(p.mean_dcer_pp)} pp · ค่าติดลบหมายถึง A ดีกว่า</p><p>ช่วง 95%: {p.ci95_pp?p.ci95_pp.map(number).join(" ถึง ")+" pp":"ข้อมูลไม่พอคำนวณ"}</p><p>{p.documents} เอกสาร · {p.test_cases} ชุด · <strong>{verdict(p,data.pipelines)}</strong></p><p className="filter-note">ช่วงนี้สะท้อนความไม่แน่นอนของข้อมูลชุดนี้ หากคร่อม 0 ยังสรุปผู้ชนะไม่ได้ · ต้องมีอย่างน้อย {data.minimum_documents} เอกสาร</p></>:<p>เลือกอย่างน้อยสอง Pipeline ที่ใช้งานอยู่</p>}</section>
+ <section className="panel panel-body" aria-label="คำแนะนำปัจจุบัน" data-testid="comparison-hero"><h2 className="text-2xl font-semibold">{empty?"ยังไม่มีข้อมูลสำหรับเปรียบเทียบ":d.recommendation?"แนะนำตอนนี้":"ยังตัดสินผู้ชนะไม่ได้"}</h2>
+ {empty?<p className="mt-3">เริ่มจากทดสอบ OCR และยืนยัน Ground Truth แล้วผลเปรียบเทียบจะปรากฏที่นี่</p>:<><p className="text-xl font-semibold mt-3">{d.recommendation?nameOf(d.recommendation,data.pipelines):leader?`${leader.pipeline_name} นำเชิงตัวเลข`:"ยังไม่มีคู่ที่มีข้อมูลพร้อมเทียบ"}</p><p>{d.recommendation?"ชนะตัวเลือกอันดับถัดไปอย่างชัดเจน":"หลักฐานยังไม่ชัดพอที่จะประกาศผู้ชนะ"}</p><p>เทียบตรงกัน {p?.documents??0} เอกสาร</p>{!r.valid_pair&&r.reason&&<p className="filter-note">{r.reason}</p>}</>}
+ </section>
+ <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="comparison-simple-cards">
+ <section className="panel panel-body"><h3 className="font-semibold">ใครนำด้านความแม่นยำ?</h3><p className="mt-2">{empty||!leader?"ยังไม่มีผลที่ยืนยัน":leader.pipeline_name}</p>{leaderCer!==null&&<p>CER {percent(leaderCer)} · ยิ่งต่ำยิ่งดี</p>}</section>
+ <section className="panel panel-body"><h3 className="font-semibold">มีข้อมูลเทียบตรงกันเท่าไร?</h3><p className="mt-2">{p?.documents??0} เอกสาร · {p?.test_cases??0} ชุดทดสอบ</p><p className="filter-note">เอกสารที่ทั้งคู่มี Ground Truth และผลที่ใช้เทียบได้</p></section>
+ <section className="panel panel-body"><h3 className="font-semibold">ควรทำอะไรต่อ?</h3><p className="mt-2">{next}</p>{empty&&<Link className="text-link" href="/">เริ่มทดสอบ OCR</Link>}</section>
  </div>
- <Scatter decision={d}/>
- <section className="panel panel-body"><h2 className="text-lg font-semibold">สิ่งที่ควรทำต่อ</h2><ul className="list-disc pl-5 mt-3 space-y-2">
- {data.actions.missing_gt>0&&<li>ใส่ GT และยืนยันเพิ่ม {data.actions.missing_gt} ชุดที่ยังไม่มีข้อความถูกต้องยืนยัน</li>}
- {data.actions.missing_runs.filter(a=>a.count>0).map(a=><li key={a.pipeline_id}>รัน {a.pipeline_name} เพิ่มใน {a.count} ชุดที่ Pipeline อื่นเคยรันแล้ว</li>)}
- {data.actions.failed_runs.filter(a=>a.count>0).map(a=><li key={a.pipeline_id}>ตรวจผลรันไม่สำเร็จของ {a.pipeline_name}: {a.count} ชุด</li>)}
- {data.actions.short_types.map(t=><li key={t.code}>{t.name}: มีผลประเมินจาก {t.documents} เอกสาร ต้องเพิ่มอย่างน้อย {t.needed} เอกสารให้ถึง {data.minimum_documents} (คู่เปรียบเทียบยังต้องมีผลครบทั้งคู่)</li>)}
- </ul><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">{[["ชุดที่ผลต่างกันมาก",data.actions.largest_spread],["ชุดที่แม้ผลดีที่สุดยังมี CER สูง",data.actions.hardest]].map(([title,items])=><div key={String(title)}><h3 className="font-semibold">{String(title)}</h3><ul>{(items as typeof data.actions.hardest).map(c=><li key={c.test_case_id}><Link className="text-link" href={c.href}>{c.filename}</Link> · {title==="ชุดที่ผลต่างกันมาก"?`ส่วนต่าง ${percent(c.spread)}`:`CER ดีที่สุด ${percent(c.best_cer)}`}</li>)}</ul></div>)}</div></section>
- <div id="comparison-pairs"><PairDetail decision={d} identities={data.pipelines}/></div>
+ {!empty&&<><section className="panel panel-body"><h2 className="text-lg font-semibold">ขั้นตอนถัดไป</h2><ul className="list-disc pl-5 mt-3">{actions.slice(0,3).map(a=><li key={a}>{a}</li>)}</ul><details className="mt-3"><summary className="cursor-pointer">ดูทั้งหมด</summary><ul className="list-disc pl-5">{actions.slice(3).map(a=><li key={a}>{a}</li>)}</ul>{[...data.actions.largest_spread,...data.actions.hardest].map((c,i)=><p key={`${c.test_case_id}-${i}`}><Link className="text-link" href={c.href}>{c.filename}</Link></p>)}</details></section><ManualPair data={data}/></>}
+ {!empty&&<details className="panel panel-body"><summary className="cursor-pointer font-semibold">รายละเอียดเพิ่มเติม</summary><details className="my-3"><summary className="cursor-pointer">หลักฐานเชิงสถิติ</summary><p>พร้อมเทียบ {r.x} จาก {r.y} ชุด · {r.documents} เอกสาร</p><p>รอ GT {r.reasons.missing_gt} · ยังไม่รัน {r.reasons.not_run} · รันไม่สำเร็จ {r.reasons.failed} · ไม่เข้าเกณฑ์อื่น {r.reasons.other}</p><PairDetail decision={d} identities={data.pipelines}/></details><details className="my-3"><summary className="cursor-pointer">ความแม่นยำ × เวลา</summary><Scatter decision={d}/></details><details><summary className="cursor-pointer">เปรียบเทียบทุก Pipeline</summary><PairTable pairs={[...d.pairs,...d.historical_pairs]} identities={data.pipelines}/></details></details>}
  </>;
 }
 function Scatter({decision}:{decision:Decision}){
@@ -47,6 +72,13 @@ function Scatter({decision}:{decision:Decision}){
  {points.map((p,i)=><circle key={p.pipeline_id} cx={x(p.time_seconds!)} cy={y(p.cer!)} r="7" tabIndex={0} aria-label={`${p.pipeline_name}: CER ${percent(p.cer)}, ${number(p.time_seconds)} วินาที, ${p.documents} เอกสาร, ${p.timed_runs} runs, ${p.cohort_mode}, ${p.active?"ใช้งานอยู่":"เก็บถาวร"}`} fill={p.filled?`hsl(${i*65},60%,40%)`:"white"} stroke={`hsl(${i*65},60%,40%)`} strokeWidth="2" strokeDasharray={!p.active?"3 2":undefined}><title>{p.pipeline_name} · CER {percent(p.cer)} · {number(p.time_seconds)} วินาที · n={p.documents} เอกสาร · {p.timed_runs} runs · {p.cohort_mode} · {p.active?"ใช้งานอยู่":"เก็บถาวร"}</title></circle>)}</svg>
  <ul className="filter-note">{s.points.map(p=><li key={p.pipeline_id}>{p.pipeline_name}{!p.active?" · เก็บถาวร":""} · CER {percent(p.cer)} · {number(p.time_seconds)} วินาที · n={p.documents} เอกสาร / {p.timed_runs} runs · {p.cohort_mode==="common"?"เอกสารร่วมกัน":"เอกสารของ Pipeline นี้"}{p.pareto&&s.pareto_valid?" · แนว Pareto":""}</li>)}</ul><p className="filter-note">เอกสารร่วมกันของ active ทั้งหมด: {s.common_documents} เอกสาร / {s.common_test_cases} ชุด · เวลาของ Global workflow เป็นผลรวมเวลา Field ไม่ใช่เวลารอทั้งหน้า</p></section>;
 }
-export function ByType({data}:{data:Comparison}){
+function ByTypeTable({data}:{data:Comparison}){
  return <section className="panel panel-body"><h2 className="text-lg font-semibold">ควรใช้ Pipeline ไหนกับเอกสารประเภทนี้?</h2><div className="table-wrap" tabIndex={0}><table className="data-table" style={{minWidth:700}} aria-label="เปรียบเทียบตามประเภทเอกสาร"><thead><tr><th>ประเภทเอกสาร</th>{data.pipelines.map(p=><th key={p.pipeline_id}>{p.pipeline_name}{!p.active&&<span className="badge neutral">เก็บถาวร</span>}</th>)}</tr></thead><tbody>{data.by_type.map(g=><tr key={g.code}><td style={{minWidth:260}}><strong>{g.name}</strong>{g.archived&&<span className="badge neutral">เก็บถาวร</span>}<p>{g.documents} เอกสารในขอบเขต</p><p className="font-semibold">{g.decision.recommendation?`แนะนำ: ${nameOf(g.decision.recommendation,data.pipelines)}`:g.decision.featured_pair&&g.decision.featured_pair.documents>=data.minimum_documents?"ยังไม่มีผู้ชนะชัดเจน":`ยังไม่พอจัดอันดับ · มี ${g.decision.featured_pair?.documents??0} จาก ${data.minimum_documents} เอกสารที่ต้องมี`}</p>{new Set(g.decision.cells.map(c=>c.documents)).size>1&&<p className="filter-note">n ต่างกัน — ดูเทียบทีละคู่</p>}<PairDetail decision={g.decision} identities={data.pipelines}/></td>{g.decision.cells.map(c=><td key={c.pipeline_id} style={{backgroundColor:c.cer===null?undefined:`rgba(13,148,136,${Math.min(.2,c.cer*.2)})`}}>{percent(c.cer)}<span className="row-meta">n={c.documents} เอกสาร</span></td>)}</tr>)}</tbody></table></div><p className="filter-note">ตัวเลขในแต่ละช่องคำนวณจากเอกสารที่ Pipeline นั้นมีผล ส่วนคำแนะนำคำนวณจากเอกสารชุดเดียวกันแบบเทียบเป็นคู่</p></section>;
+}
+
+export function ByType({data}:{data:Comparison}){
+ return <><div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="คำแนะนำตามประเภทเอกสาร">{data.by_type.map(g=>{
+ const d=g.decision,p=d.featured_pair,leader=d.ranking[0];
+ return <section className="panel panel-body" key={g.code}><h2 className="text-lg font-semibold">{g.name}</h2>{g.archived&&<span className="badge neutral">เก็บถาวร</span>}<p className="font-semibold mt-2">{d.recommendation?`แนะนำตอนนี้: ${nameOf(d.recommendation,data.pipelines)}`:p&&p.documents>=data.minimum_documents?"ยังตัดสินผู้ชนะไม่ได้":"ข้อมูลยังไม่เพียงพอ"}</p>{!d.recommendation&&leader&&<p>{leader.pipeline_name} นำเชิงตัวเลข</p>}<p>เทียบตรงกัน {p?.documents??0} เอกสาร · {p?.test_cases??0} ชุดทดสอบ</p><p className="filter-note">ทั้งหมดในขอบเขต {g.documents} เอกสาร</p><p>ขั้นตอนต่อไป: {d.readiness.reasons.missing_gt?`ยืนยัน GT อีก ${d.readiness.reasons.missing_gt} ชุด`:d.readiness.reasons.not_run?`รันคู่หลักอีก ${d.readiness.reasons.not_run} ชุด`:d.readiness.reasons.failed?`ตรวจผลรันไม่สำเร็จ ${d.readiness.reasons.failed} ชุด`:p&&p.documents<data.minimum_documents?`เพิ่มเอกสารที่เทียบตรงกันอีก ${data.minimum_documents-p.documents} เอกสาร`:"ตรวจผลรายชุดและเพิ่มเอกสารที่ยืนยัน"}</p></section>;
+ })}</div><details className="panel panel-body"><summary className="cursor-pointer font-semibold">ดูตารางทุก Pipeline</summary><ByTypeTable data={data}/></details></>;
 }

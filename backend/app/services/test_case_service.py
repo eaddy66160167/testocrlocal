@@ -1,13 +1,15 @@
 import re
 from hashlib import sha256
 
+from sqlalchemy import delete, select
+
 from app.core.errors import AppError
-from app.db.models import Document, Metric, OCRErrorEvent, TestCase, new_id, now
+from app.db.models import Document, Metric, TestCase, new_id, now
 from app.repositories.benchmark_repository import BenchmarkRepository
 from app.services.field_service import FieldService
 from app.services.image_service import ImageService
 from app.services.log_service import LogService
-from app.services.metrics_service import calculate_metrics, error_breakdown, normalize_text
+from app.services.metrics_service import calculate_metrics, normalize_text
 from app.services.pdf_service import PdfService
 from app.services.pipeline_manager import PipelineManager
 
@@ -143,6 +145,19 @@ class TestCaseService:
             session.rollback()
             raise
 
+    def bulk_delete(self, ids):
+        session = self.repository.session
+        ids = set(ids)
+        try:
+            found = set(session.scalars(select(TestCase.id).where(TestCase.id.in_(ids)).with_for_update()))
+            # Schema FK cascades remove exactly the same owned rows as ORM individual delete.
+            session.execute(delete(TestCase).where(TestCase.id.in_(found)), execution_options={"synchronize_session": False})
+            session.commit()
+            return dict(requested=len(ids), deleted=len(found), already_missing=len(ids - found))
+        except Exception:
+            session.rollback()
+            raise
+
     def _set_ground_truth(self, record, text, confirmed):
         record.ground_truth_raw = text
         record.ground_truth_normalized = normalize_text(text) if text is not None else None
@@ -159,10 +174,8 @@ class TestCaseService:
             run.metric_records.clear()
             return
         existing = {item.text_kind: item for item in run.metric_records}
-        for text_kind, text in (("raw", run.raw_text), ("final", run.final_text)):
+        for text_kind, text in (("raw", run.raw_text if run.raw_text is not None else run.final_text), ("final", run.final_text)):
             values = calculate_metrics(text or "", ground_truth)
-            run.error_events.extend(OCRErrorEvent(test_case_id=run.test_case_id, text_kind=text_kind, **event)
-                                    for event in error_breakdown(text or "", ground_truth))
             if text_kind in existing:
                 for key, value in values.items():
                     setattr(existing[text_kind], key, value)
