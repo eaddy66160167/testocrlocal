@@ -5,6 +5,7 @@ import type {TestCase,FieldComparison,PipelineConfig} from "../types";
 import {comparisonExamples} from "../lib/comparison-examples";
 import {pipelineModelDisplay} from "../lib/pipeline-model-label";
 import {minimumCer, testMinimumCer} from "../components/BestCer";
+import {alignmentCounts} from "../components/CanonicalAlignment";
 import {pipelineColor} from "../components/AccuracySpeedChart";
 
 const ids=["dynamic_a","dynamic_b","disabled_old"];
@@ -43,9 +44,9 @@ for(const width of [1440,1024,768,390])test(`real contracts responsive dashboard
  await expect(hero).not.toContainText(/P95|95% under|Accuracy/);
  const table=page.getByRole("table",{name:"All Pipelines"});await expect(table.locator("tbody tr")).toHaveCount(2);await expect(table).not.toContainText(ids[0],{useInnerText:true});await expect(table).toContainText(names[0]);await expect(table).not.toContainText(names[2]);
  await table.locator("summary").first().click();await expect(table).toContainText("Registered detector");await expect(table).toContainText("registered_weight");await table.locator("summary").first().click();
- await expect(page.locator(".comparison-four")).toContainText("กข");await expect(page.locator(".comparison-four").getByTestId("field-error")).toContainText("ง");await expect(page.getByRole("link",{name:"เปิดภาพต้นฉบับ"})).toHaveAttribute("href",/x1=20.*page_number=2/);
+ await expect(page.locator(".comparison-four")).toContainText("กข");await expect(page.locator(".comparison-four [data-alignment-side=ocr]").getByTestId("field-error")).toContainText("ง");await expect(page.getByRole("link",{name:"เปิดภาพต้นฉบับ"})).toHaveAttribute("href",/x1=20.*page_number=2/);
  await page.getByRole("button",{name:"ตัวอย่างถัดไป"}).click();await expect(page.locator(".comparison-original")).toContainText("second.png");
- await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors")).toContainText("อ่านผิด");await expect(page.locator("#comparison-errors dd").first()).toHaveText("1");
+ await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors")).toContainText("Substitution (ผิด)");await expect(page.locator("#comparison-errors [data-count-kind=substitution] dd")).toHaveText("1");
  await page.getByRole("tab",{name:"Character diff",exact:true}).click();await page.getByRole("button",{name:"ตัวอย่างก่อนหน้า"}).click();await expect(page.locator(".comparison-original")).toContainText("first.png");
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
  fs.mkdirSync("../.runtime/comparison-redesign",{recursive:true});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`../.runtime/comparison-redesign/dashboard-${width}.png`,fullPage:true});
@@ -72,8 +73,8 @@ test("CER above 100 stays honest and all error kinds remain distinguishable",asy
  await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));
  const c=sample("errors"),e={...evaluation,character_edits:3,spans:[{kind:"equal" as const,text:"ก"},{kind:"substitution" as const,text:"ง",missing:"ข"},{kind:"insertion" as const,text:"จ"},{kind:"deletion" as const,text:"",missing:"ค"}]};c.runs[1].fields![0].evaluation=e;
  await page.route("**/api/history*",r=>r.fulfill({json:[c]}));await page.route("**/api/test-cases/*",r=>r.fulfill({json:c}));await page.goto("/matrix");
- await expect(page.getByTestId("comparison-hero")).toContainText("150.0%");const result=page.locator(".comparison-four");for(const kind of ["substitution","insertion","deletion"])await expect(result.locator(`[data-error-type=${kind}]`)).toBeVisible();
- await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors dd")).toHaveText(["1","1","1"]);
+ await expect(page.getByTestId("comparison-hero")).toContainText("150.0%");const result=page.locator(".comparison-four");for(const kind of ["substitution","insertion","deletion"])await expect(result.locator(`[data-alignment-side=ocr] [data-error-type=${kind}]`)).toBeVisible();
+ await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors dd")).toHaveText(["1","1","1","1"]);
  await page.getByRole("tab",{name:"Per-line view",exact:true}).click();await expect(page.locator("#comparison-errors").getByTestId("field-error")).toHaveCount(3);
 });
 test("legacy confirmed whole GT remains readable without saved spans",()=>{
@@ -273,4 +274,62 @@ test("chart keeps incomplete pipelines in legend without inventing points or Par
  await fixtures(page);const d=decision();d.overall.scatter.points=d.overall.cells.map(c=>({...c,cer:null,time_seconds:null,filled:false,pareto:true,cohort_mode:"own"}));
  await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.goto("/matrix");await page.getByText("Advanced evaluation details",{exact:true}).click();await page.locator("summary").filter({hasText:"ความแม่นยำ × ความเร็ว"}).click();
  await expect(page.locator(".comparison-speed")).toContainText("ยังไม่มีผลที่มีทั้ง CER และเวลา");await expect(page.getByTestId("chart-marker")).toHaveCount(0);await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);await expect(page.locator(".comparison-speed-legend li")).toHaveCount(2);
+});
+
+const alignmentFixtures:Record<string,{gt:string;ocr:string;spans:FieldComparison["spans"];cer:number;counts:number[]}>= {
+ exact:{gt:"ก😀",ocr:"ก😀",spans:[{kind:"equal",text:"ก😀"}],cer:0,counts:[2,0,0,0]},
+ substitution:{gt:"ข",ocr:"ง",spans:[{kind:"substitution",text:"ง",missing:"ข"}],cer:1,counts:[0,1,0,0]},
+ insertion:{gt:"ฟ",ocr:"ฟ"+"ภาษาไทย".repeat(4),spans:[{kind:"equal",text:"ฟ"},{kind:"insertion",text:"ภาษาไทย".repeat(4)}],cer:28,counts:[1,0,28,0]},
+ deletion:{gt:"กข",ocr:"ก",spans:[{kind:"equal",text:"ก"},{kind:"deletion",text:"",missing:"ข"}],cer:.5,counts:[1,0,0,1]},
+ mixed:{gt:"กขงจ",ocr:"กคXจ",spans:[{kind:"equal",text:"ก"},{kind:"substitution",text:"ค",missing:"ข"},{kind:"insertion",text:"X"},{kind:"deletion",text:"",missing:"ง"},{kind:"equal",text:"จ"}],cer:.75,counts:[2,1,1,1]},
+};
+function alignmentCase(name:string){
+ const fixture=alignmentFixtures[name],c=sample("alignment");c.global_fields![0].ground_truth_raw=fixture.gt;
+ c.runs.forEach((r,i)=>{
+  const e:FieldComparison={...evaluation,cer:i?0:fixture.cer,character_edits:i?0:fixture.counts.slice(1).reduce((a,b)=>a+b,0),normalized_ground_truth:fixture.gt,normalized_ocr:i?fixture.gt:fixture.ocr,gt_characters:Array.from(fixture.gt).length,spans:i?[{kind:"equal",text:fixture.gt}]:fixture.spans};
+  r.fields![0]={...r.fields![0],ocr_text:i?fixture.gt:fixture.ocr,ground_truth_raw:fixture.gt,evaluation:e};
+ });return c;
+}
+for(const width of [1440,390])for(const name of Object.keys(alignmentFixtures))test(`canonical paired alignment ${name} ${width}`,async({page})=>{
+ await fixtures(page);const c=alignmentCase(name),f=alignmentFixtures[name];
+ await page.route("**/api/history*",r=>r.fulfill({json:[c]}));await page.route("**/api/test-cases/*",r=>r.fulfill({json:c}));await page.setViewportSize({width,height:1100});await page.goto("/matrix");
+ const a=page.locator(".comparison-four article").nth(2),b=page.locator(".comparison-four article").nth(3);
+ await expect(a.locator(".alignment-summary dd")).toHaveText(f.counts.map(String));await expect(b.locator(".alignment-summary dd")).toHaveText([String(Array.from(f.gt).length),"0","0","0"]);
+ await expect(a.locator("footer strong")).toHaveText(`This field CER ${(f.cer*100).toFixed(1)}%`);
+ const gt=a.locator('[data-alignment-side="gt"]'),ocr=a.locator('[data-alignment-side="ocr"]');
+ for(const kind of new Set(f.spans.map(s=>s.kind))){await expect(gt.locator(`[data-alignment-kind=${kind}]`).first()).toBeVisible();await expect(ocr.locator(`[data-alignment-kind=${kind}]`).first()).toBeVisible();}
+ if(name==="substitution"||name==="mixed"){
+  await expect(gt.locator(".substitution")).toHaveText("ข");await expect(ocr.locator(".substitution")).toHaveText(name==="mixed"?"ค":"ง");await expect(ocr.locator(".substitution")).toHaveAttribute("title",/Ground Truth: ข → OCR:/);
+ }
+ if(name==="insertion"||name==="mixed"){await expect(gt.locator(".insertion")).toHaveText("∅");await expect(gt.locator(".insertion")).toHaveAttribute("title",/ไม่มีตัวอักษรใน Ground Truth/);}
+ if(name==="deletion"||name==="mixed"){await expect(gt.locator(".deletion")).toHaveText(name==="mixed"?"ง":"ข");await expect(ocr.locator(".deletion")).toHaveText(name==="mixed"?"⟦ขาด: ง⟧":"⟦ขาด: ข⟧");}
+ await expect(page.locator(".comparison-four article").nth(1).locator(".comparison-text")).toHaveText(f.gt);
+ for(const kind of ["equal","substitution","insertion","deletion"]){
+  const legend=page.locator(`.comparison-legend .${kind}`);await expect(legend).toBeVisible();
+  const mark=a.locator(`.comparison-span.${kind}`).first();if(await mark.count())expect(await mark.evaluate(e=>getComputedStyle(e).backgroundColor)).toBe(await legend.evaluate(e=>getComputedStyle(e).backgroundColor));
+ }
+ // B is exact even if A has errors: the two pipelines never share classifications.
+ await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors .alignment-summary dd")).toHaveText([String(Array.from(f.gt).length),"0","0","0"]);
+ await page.getByRole("tab",{name:"Per-line view",exact:true}).click();await expect(page.locator("#comparison-errors").getByTestId("field-error")).toHaveCount(0);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ fs.mkdirSync("../.runtime/alignment-review",{recursive:true});await page.locator("#compare-results").screenshot({path:`../.runtime/alignment-review/${name}-${width}.png`});
+ if(name==="mixed"){
+  await page.getByRole("button",{name:"สลับ Pipeline",exact:true}).click();await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();
+  await expect(page.locator("#comparison-errors .alignment-summary dd")).toHaveText(f.counts.map(String));
+  await page.getByRole("tab",{name:"Character diff",exact:true}).click();await expect(page.locator('#comparison-errors [data-alignment-side="gt"] .substitution')).toHaveText("ข");
+  await page.getByRole("tab",{name:"Per-line view",exact:true}).click();await expect(page.locator("#comparison-errors").getByTestId("field-error")).toHaveCount(3);
+ }
+});
+test("canonical counts are codepoints and do not mutate input",()=>{
+ const spans:FieldComparison["spans"]=[{kind:"equal",text:"😀ก"},{kind:"substitution",text:"ข",missing:"ค"},{kind:"insertion",text:"😀"},{kind:"deletion",text:"",missing:"😀"}];
+ const before=JSON.stringify(spans);expect(alignmentCounts(spans)).toEqual({equal:2,substitution:1,insertion:1,deletion:1});expect(JSON.stringify(spans)).toBe(before);
+});
+test("compact history waits for rich detail; true missing alignment stays neutral",async({page})=>{
+ await fixtures(page);const rich=alignmentCase("mixed"),compact=structuredClone(rich);compact.runs.forEach(r=>{delete (r.fields![0].evaluation as Partial<FieldComparison>).spans;});
+ await page.route("**/api/history*",r=>r.fulfill({json:[compact]}));let release!:()=>void;const wait=new Promise<void>(resolve=>{release=resolve;});
+ await page.route("**/api/test-cases/*",async r=>{await wait;await r.fulfill({json:rich});});await page.goto("/matrix");
+ await expect(page.locator(".comparison-four")).toContainText("กำลังโหลดรายละเอียด alignment");await expect(page.locator(".comparison-four")).not.toContainText("ไม่สามารถสร้างรายละเอียด");release();
+ await expect(page.locator(".comparison-four article").nth(2).locator(".alignment-summary dd")).toHaveText(["2","1","1","1"]);await expect(page.locator("main")).not.toContainText("ผลเก่าไม่มีข้อมูล alignment");
+ await page.route("**/api/test-cases/*",r=>r.fulfill({json:compact}));await page.reload();
+ await expect(page.locator(".comparison-four")).toContainText("ไม่สามารถสร้างรายละเอียด alignment สำหรับผลนี้ได้");await expect(page.locator(".comparison-four .alignment-summary")).toHaveCount(0);await expect(page.locator(".comparison-four [data-alignment-kind]")).toHaveCount(0);await expect(page.locator(".comparison-four footer").first()).toContainText("75.0%");
 });

@@ -68,7 +68,7 @@ for(const width of [390,1440])test(`comparison scroll, pinned GT, modes and expl
  await expect(analysis).toHaveCount(2);
  await expect(analysis.nth(1)).toContainText("GT: Line2");
  await expect(analysis.nth(1)).toContainText("OCR: LineX");
- await expect(analysis.nth(1).locator('[data-error-type="deletion"]')).toHaveClass(/bg-amber-100/);
+ await expect(analysis.nth(1).locator('[data-error-type="deletion"]')).toHaveClass(/comparison-span deletion/);
  await expect(analysis.nth(1)).toContainText("⟦ขาด: !⟧");
  const beforeRequests=mutationRequests.length;
  await expect(scroll.locator("tbody").getByRole("button",{name:/Expand/})).toHaveCount(0);
@@ -116,7 +116,7 @@ for(const width of [390,1440])test(`comparison scroll, pinned GT, modes and expl
  await expect(scroll.getByRole("rowheader")).toContainText("Whole GT");
  await expect(scroll.getByTestId("global-result-pipeline-0")).toContainText("Whole OCR 1");
  await scroll.getByTestId("global-result-pipeline-0").getByText("Error Analysis",{exact:true}).click();
- await expect(scroll.getByTestId("global-result-pipeline-0").locator('[data-error-type="deletion"]')).toHaveClass(/bg-amber-100/);
+ await expect(scroll.getByTestId("global-result-pipeline-0").locator('[data-error-type="deletion"]')).toHaveClass(/comparison-span deletion/);
  await expect(scroll.getByTestId("global-result-pipeline-0")).toContainText("⟦ขาด: T⟧");
  await page.getByRole("button",{name:"Sub-fields",exact:true}).click();
  expect(calculations).toBe(0);
