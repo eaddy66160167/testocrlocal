@@ -126,6 +126,33 @@ test("fresh detail eligibility overrides stale history GT",async({page})=>{
  await expect(page.locator(".comparison-four")).toHaveCount(0);
 });
 
+test("matched documents outside the History page keep honest empty copy and pagination",async({page})=>{
+ await fixtures(page);
+ const d=decision();d.overall.featured_pair!.documents=5;
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));
+ const unavailable=Array.from({length:21},(_,i)=>{const c=sample(`unconfirmed-${i}`);c.global_fields![0].confirmed_at=null;return c;});
+ await page.route("**/api/history*",r=>r.fulfill({json:new URL(r.request().url()).searchParams.get("offset")==="20"?[sample("next-page")]:unavailable}));
+ await page.goto("/matrix");
+ const empty=page.locator("#compare-results .comparison-empty");
+ await expect(empty).toContainText("ยังไม่พบตัวอย่างที่พร้อมเปรียบเทียบในหน้าประวัติปัจจุบัน");
+ await expect(empty).toContainText("ระบบมีเอกสารที่เทียบตรงกัน 5 ฉบับ");
+ await expect(empty).not.toContainText("ยังไม่มีเอกสารชุดเดียวกันที่ Pipeline ทั้งสองมีผลพร้อมเปรียบเทียบ");
+ await page.getByRole("button",{name:"ดูตัวอย่างจากหน้าถัดไป"}).click();
+ await expect(page.locator(".comparison-four")).toBeVisible();
+ await expect(page.locator(".comparison-original")).toContainText("next-page.png");
+});
+
+test("zero matched documents retain true-zero empty copy",async({page})=>{
+ await fixtures(page);const d=decision();d.overall.featured_pair!.documents=0;
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));
+ await page.route("**/api/history*",r=>r.fulfill({json:[]}));
+ await page.goto("/matrix");
+ const empty=page.locator("#compare-results .comparison-empty");
+ await expect(empty).toContainText("ยังไม่มีเอกสารชุดเดียวกันที่ Pipeline ทั้งสองมีผลพร้อมเปรียบเทียบ");
+ await expect(empty).toContainText("ต้องมี Ground Truth ที่ยืนยันแล้วและผลสำเร็จของทั้งสอง Pipeline");
+ await expect(empty).not.toContainText("ระบบมีเอกสารที่เทียบตรงกัน");
+});
+
 for(const field of [true,false])test(`paired, overall and ${field?"field":"document"} CER have distinct scopes`,async({page})=>{
  await fixtures(page);
  const d=decision();d.overall.featured_pair!.mean_cer_a=.031;d.overall.featured_pair!.mean_cer_b=.142;d.overall.featured_pair!.mean_dcer_pp=-11.1;
