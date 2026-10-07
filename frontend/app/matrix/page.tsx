@@ -2,21 +2,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison } from "@/lib/api";
+import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison, getMatrix, getPipelines } from "@/lib/api";
 import { useAnalyticsFilters, useComparisonDisplay } from "@/lib/analytics-scope";
-import AnalyticsFilters from "@/components/AnalyticsFilters";
-import {DecisionOverview, ByType} from "@/components/ComparisonDecision";
+import ComparisonFilters from "@/components/ComparisonFilters";
+import {currentComparisonNames} from "@/lib/comparison-identity";
+import {ByType} from "@/components/ComparisonDecision";
+import { ComparisonHero, PipelineRanking, DocumentTypeWinners, PipelineSideBySide } from "@/components/ComparisonDashboard";
 import type {Comparison} from "@/types/comparison";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
   AnalyticsPipeline,
   AnalyticsSummary,
   TestCase,
+  PipelineConfig,
+  MatrixRow,
 } from "@/types";
 import { percent } from "@/components/MatrixTable";
 import {
-  PageHeader,
-  FilterBar,
   LoadingState,
   EmptyState,
 } from "@/components/ConsoleUI";
@@ -27,7 +29,9 @@ export default function MatrixPage() {
   const [filters, setFilters] = useAnalyticsFilters();
   const display = useComparisonDisplay();
   const [decision, setDecision] = useState<Comparison|null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [configs,setConfigs]=useState<PipelineConfig[]>([]);
+  const [matrix,setMatrix]=useState<MatrixRow[]>([]);
+  const [chosenPair,setChosenPair]=useState<[string,string]|null>(null);
   const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
     [search, setSearch] = useState(""),
@@ -40,6 +44,11 @@ export default function MatrixPage() {
     filters.date_to &&
     filters.date_from > filters.date_to
   );
+  useEffect(()=>{
+    const refresh=()=>setRevision(n=>n+1);
+    window.addEventListener("focus",refresh);
+    return()=>window.removeEventListener("focus",refresh);
+  },[]);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -54,14 +63,19 @@ export default function MatrixPage() {
         getAnalyticsPipelines(),
         getAnalyticsSummary(filters),
         getComparison(filters, display.includeArchived),
+        getPipelines(),
+        getMatrix(filters),
       ])
-        .then(([h, p, s, d]) => {
+        .then(([h, p, s, d, config, m]) => {
           if (active) {
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
             setPipelines(p);
             setSummary(s);
-            setDecision(d);
+            // Current names/settings are authoritative. Historical identities retain their saved names.
+            setDecision(currentComparisonNames(d,config));
+            setConfigs(config);
+            setMatrix(m);
           }
         })
         .catch((e) => {
@@ -85,56 +99,17 @@ export default function MatrixPage() {
   const selected = (decision?.pipelines ?? []).filter(
     (p) => !filters.pipeline || p.pipeline_id === filters.pipeline,
   );
+  const identities=decision?.pipelines??[];
+  const defaults:[string,string]=[decision?.overall.recommendation??decision?.overall.ranking[0]?.pipeline_id??identities[0]?.pipeline_id??"",decision?.overall.ranking[1]?.pipeline_id??identities[1]?.pipeline_id??""];
+  const pair:[string,string]=chosenPair&&chosenPair.every(id=>identities.some(p=>p.pipeline_id===id))?chosenPair:defaults;
+  const compare=(id?:string)=>{
+    if(id)setChosenPair([id,identities.find(p=>p.pipeline_id!==id)?.pipeline_id??""]);
+    document.getElementById("compare-results")?.scrollIntoView({behavior:"smooth"});
+  };
   return (
-    <div className="page-stack">
-      <PageHeader
-        title="เปรียบเทียบ Pipeline"
-        description="เลือก Pipeline ที่ควรใช้ จากผลบนเอกสารชุดเดียวกัน"
-        actions={
-          <button
-            className="button secondary"
-            disabled={loading}
-            onClick={() => setRevision((n) => n + 1)}
-          >
-            <RefreshCw size={16} />
-            รีเฟรช
-          </button>
-        }
-      />
-      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div>
-      <label className="flex gap-2 items-center"><input type="checkbox" checked={!display.includeArchived} onChange={e=>display.update("include_archived",e.target.checked ? "" : "1")}/>เฉพาะ Pipeline ที่ใช้งานอยู่</label>
-      <button className="button secondary self-start" aria-expanded={showFilters || Object.values(filters).some(Boolean)} onClick={()=>setShowFilters(v=>!v)}>ตัวกรองเอกสารและวันที่</button>
-      <div hidden={!showFilters && !Object.values(filters).some(Boolean)}><FilterBar
-        count={
-          Object.values(filters).filter(Boolean).length +
-          Number(!!search) +
-          Number(onlyGT)
-        }
-        onClear={() => {
-          setFilters({});
-          setSearch("");
-          setOnlyGT(false);
-          setOffset(0);
-        }}
-      >
-        <AnalyticsFilters
-          value={filters}
-          pipelines={pipelines}
-          onChange={(k, v) => {
-            setFilters((old) => ({ ...old, [k]: v || undefined }));
-            setOffset(0);
-          }}
-        />
-        <label className="field">
-          ค้นหาเอกสารในหน้านี้
-          <input
-            className="input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ชื่อเอกสาร"
-          />
-        </label>
-      </FilterBar></div>
+    <div className="page-stack comparison-page">
+      <div className="comparison-top"><div><h1>OCR Pipeline Comparison</h1><p>เปรียบเทียบ OCR Pipeline จากผลทดสอบบนเอกสารจริง</p></div><ComparisonFilters value={filters} onChange={v=>{setFilters(v);setOffset(0);}} pipelines={pipelines} archived={display.includeArchived} onArchived={v=>display.update("include_archived",v?"1":"")} search={search} onSearch={setSearch} onReset={()=>{setFilters({});setSearch("");setOnlyGT(false);setOffset(0);}}/></div>
+      <div className="comparison-section-head"><div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="comparison-tabs"><button role="tab" aria-selected={display.view === "overall"} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div><button className="button secondary" disabled={loading} onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>รีเฟรช</button></div>
       {invalid && (
         <p className="error-banner" role="alert">
           วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น
@@ -157,7 +132,11 @@ export default function MatrixPage() {
         !invalid &&
         !error && (
           <>
-            {decision && (display.view === "overall" ? <DecisionOverview data={decision}/> : <ByType data={decision}/>)}
+            {decision && (display.view === "overall" ? <>
+              <ComparisonHero data={decision} rows={matrix} onCompare={()=>compare()}/>
+              <div className="comparison-main-grid"><PipelineRanking data={decision} configs={configs} rows={matrix} onCompare={compare}/><DocumentTypeWinners data={decision} onAll={()=>display.update("view","by-type")}/></div>
+              <PipelineSideBySide key={`${offset}:${JSON.stringify(filters)}`} data={decision} cases={cases} pair={pair} setPair={setChosenPair} hasNext={hasNext} onNextPage={()=>setOffset(n=>n+20)}/>
+            </> : <ByType data={decision}/>)}
             <details className="panel panel-body"><summary className="cursor-pointer font-semibold">ผลรายชุดทดสอบ</summary>
             <p className="filter-note">คำแนะนำใช้เอกสารชุดเดียวกันแบบเทียบเป็นคู่ · ตารางด้านล่างเป็นผลรายชุดทดสอบ · ค้นหาและ GT มีผลเฉพาะหน้านี้</p>
             {cases.length ? (
@@ -230,7 +209,7 @@ export default function MatrixPage() {
                                   ) : (
                                     <>
                                       <strong>
-                                        CER {percent(r.metrics?.cer)}
+                                        CER ของชุดทดสอบนี้ {percent(r.metrics?.cer)}
                                       </strong>
                                       <span className="row-meta">
                                         WER {percent(r.metrics?.wer)} · Exact{" "}
