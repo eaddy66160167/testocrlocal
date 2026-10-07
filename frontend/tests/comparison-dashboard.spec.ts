@@ -1,0 +1,80 @@
+import {test,expect,type Page} from "@playwright/test";
+import fs from "node:fs";
+import type {Comparison,Identity} from "../types/comparison";
+import type {TestCase,FieldComparison,PipelineConfig} from "../types";
+import {comparisonExamples} from "../lib/comparison-examples";
+
+const ids=["dynamic_a","dynamic_b","disabled_old"];
+const names=["โมเดลทดสอบ A · ชื่อจาก Pipeline Settings", "โมเดลทดสอบ B", "Archived configuration"];
+const configs=ids.map((pipeline_id,i)=>({pipeline_id,name:names[i],enabled:i<2,source:"custom",execution_mode:"det_rec",det_model:{name:"Registered detector",version:"6",weight:"registered_weight"},rec_model:{name:"Registered recognizer",version:"5",weight:"registry_rec"}})) as PipelineConfig[];
+function decision(archived=false,clear=true):Comparison {
+ const pipelines:Identity[]=configs.filter(p=>archived||p.enabled).map(p=>({pipeline_id:p.pipeline_id,pipeline_name:"stale saved name",active:p.enabled,retired:!p.enabled}));
+ const pair={a:ids[0],b:ids[1],documents:8,test_cases:12,mean_cer_a:.02,mean_cer_b:.12,mean_dcer_pp:-10,ci95_pp:[-12,-8] as [number,number],wins:8,ties:0,losses:0,winner:clear?ids[0]:null,verdict:clear?"clear" as const:"inconclusive" as const};
+ const cells=pipelines.map(p=>({...p,cer:.05,documents:8,timed_runs:9,time_seconds:1.3}));
+ const overall={recommendation:clear?ids[0]:null,ranking:pipelines.filter(p=>p.active).map(p=>({...p,score:1,mean_pair_dcer_pp:-10})),featured_pair:pair,pairs:[pair],historical_pairs:[],documents:8,cells,readiness:{x:12,y:14,documents:8,valid_pair:true,reason:null,reasons:{missing_gt:2,not_run:0,failed:0,other:0}},scatter:{points:[],common_documents:8,common_test_cases:12,cohort_mode:"common",pareto_valid:false}};
+ return {scope:{},include_archived:archived,pipelines,overall,by_type:[{code:"invoice",name:"ประเภทเอกสารจาก API",archived:false,documents:8,decision:overall}],latest_results:20,minimum_documents:5,tie_pp:.05,bootstrap_samples:2000,statistical_unit:"document",computation_ms:1,actions:{missing_gt:2,missing_runs:[],failed_runs:[],short_types:[],largest_spread:[],hardest:[]}};
+}
+const evaluation:FieldComparison={cer:.5,wer:1,exact_match:false,character_edits:1,word_edits:1,gt_characters:2,gt_words:1,normalized_ocr:"กง",normalized_ground_truth:"กข",spans:[{kind:"equal",text:"ก"},{kind:"substitution",text:"ง",missing:"ข"}]};
+function sample(id:string):TestCase {
+ return {id,document_id:`doc-${id}`,document:{id:`doc-${id}`,filename:`${id}.png`,image_url:`/api/documents/doc-${id}/image`,document_type_name:"ประเภทเอกสารจาก API",width:400,height:300},roi:{x1:20,y1:30,x2:180,y2:90},page_number:2,evaluation_mode:"per_field",workflow:"global",ground_truth_raw:null,status:"confirmed",global_fields:[{id:`field-${id}`,field_index:0,roi:{x1:20,y1:30,x2:180,y2:90},source:"auto",ground_truth_raw:"กข",confirmed_at:"2026-10-07"}],runs:ids.slice(0,2).map((pipeline_id,i)=>({id:`run-${id}-${i}`,pipeline_id,pipeline_name:names[i],created_at:"2026-10-07T00:00:00Z",status:"success",final_text:i?"กง":"กข",confidence:.8,metrics:{cer:i?.5:0,wer:i?1:0,exact_match:!i},processing_time_ms:1234,boxes:[],fields:[{id:`ocr-${id}-${i}`,global_field_id:`field-${id}`,ocr_text:i?"กง":"กข",ground_truth_raw:"กข",confirmed_at:"2026-10-07",status:"success",evaluation:i?evaluation:{...evaluation,cer:0,wer:0,character_edits:0,word_edits:0,exact_match:true,normalized_ocr:"กข",spans:[{kind:"equal",text:"กข"}]}}]}))} as unknown as TestCase;
+}
+async function fixtures(page:Page,{clear=true,empty=false,count=3}:{clear?:boolean;empty?:boolean;count?:number}={}) {
+ const list=Array.from({length:count},(_,i)=>i<3?configs[i]:{...configs[0],pipeline_id:`dynamic_${i}`,name:`Pipeline configured ${i}`,enabled:true});
+ await page.route("**/api/**",async r=>{
+  const url=new URL(r.request().url()),p=url.pathname;
+  if(p==="/api/pipelines")return r.fulfill({json:empty?[]:list});
+  if(p==="/api/analytics/comparison") {const d=decision(url.searchParams.get("include_archived")==="1",clear);if(empty){d.pipelines=[];d.latest_results=0;d.overall={...d.overall,ranking:[],recommendation:null,featured_pair:null,cells:[],pairs:[]};d.by_type=[];}else if(count>3){d.pipelines=list.filter(x=>x.enabled||d.include_archived).map(x=>({pipeline_id:x.pipeline_id,pipeline_name:x.name,active:x.enabled,retired:!x.enabled}));}return r.fulfill({json:d});}
+  if(p==="/api/history")return r.fulfill({json:empty?[]:[sample("first"),sample("second")]});
+  if(p.startsWith("/api/test-cases/"))return r.fulfill({json:sample(p.split("/").at(-1)!)});
+  if(p==="/api/matrix")return r.fulfill({json:empty?[]:list.map(p=>({pipeline_id:p.pipeline_id,pipeline_name:p.name,tests:10,successful_runs:9,failed_runs:1,evaluated_runs:9,cer:.05,timed_runs:9,avg_time_ms:1300}))});
+  if(p==="/api/analytics/pipelines")return r.fulfill({json:list.map(x=>({pipeline_id:x.pipeline_id,pipeline_name:x.name,retired:!x.enabled}))});
+  if(p==="/api/analytics/summary")return r.fulfill({json:{history_cases:2}});
+  if(p==="/api/document-types")return r.fulfill({json:[{id:"business",name:"ประเภทเอกสารจาก API",active:true}]});
+  if(p.includes("/documents/"))return r.fulfill({contentType:"image/png",body:fs.readFileSync("public/sample-document.png")});
+  return r.fulfill({json:[]});
+ });
+}
+for(const width of [1440,1024,768,390])test(`real contracts responsive dashboard ${width}`,async({page})=>{
+ await fixtures(page);await page.setViewportSize({width,height:1100});await page.goto("/matrix");
+ const hero=page.getByTestId("comparison-hero");await expect(hero).toContainText(names[0]);await expect(hero).toContainText("Strong");await expect(hero).toContainText("2.0%");await expect(hero).toContainText("90.0%");await expect(hero).toContainText("1.3 sec");await expect(hero).toContainText("8 documents");
+ await expect(hero).not.toContainText(/P95|95% under|Accuracy/);
+ const table=page.getByRole("table",{name:"All Pipelines"});await expect(table.locator("tbody tr")).toHaveCount(2);await expect(table).not.toContainText(ids[0],{useInnerText:true});await expect(table).toContainText(names[0]);await expect(table).not.toContainText(names[2]);
+ await table.locator("summary").first().click();await expect(table).toContainText("Registered detector");await expect(table).toContainText("registered_weight");await table.locator("summary").first().click();
+ await expect(page.locator(".comparison-four")).toContainText("กข");await expect(page.locator(".comparison-four").getByTestId("field-error")).toContainText("ง");await expect(page.getByRole("link",{name:"เปิดภาพต้นฉบับ"})).toHaveAttribute("href",/x1=20.*page_number=2/);
+ await page.getByRole("button",{name:"ตัวอย่างถัดไป"}).click();await expect(page.locator(".comparison-original")).toContainText("second.png");
+ await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors")).toContainText("อ่านผิด");await expect(page.locator("#comparison-errors dd").first()).toHaveText("1");
+ await page.getByRole("tab",{name:"Character diff",exact:true}).click();await page.getByRole("button",{name:"ตัวอย่างก่อนหน้า"}).click();await expect(page.locator(".comparison-original")).toContainText("first.png");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ fs.mkdirSync("../.runtime/comparison-redesign",{recursive:true});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:`../.runtime/comparison-redesign/dashboard-${width}.png`,fullPage:true});
+});
+test("N pipeline settings, archived visibility and manual pair keep decision intact",async({page})=>{
+ await fixtures(page,{count:12});await page.goto("/matrix");const hero=page.getByTestId("comparison-hero"),before=await hero.innerText();
+ await expect(page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr")).toHaveCount(11);
+ await page.getByRole("combobox",{name:"Pipeline A",exact:true}).selectOption("dynamic_11");await expect(hero).toHaveText(before,{useInnerText:true});
+ await page.getByRole("checkbox",{name:"Active pipelines only"}).uncheck();await expect(page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr")).toHaveCount(12);await expect(hero).toHaveText(before,{useInnerText:true});
+ await page.getByRole("combobox",{name:"Pipeline B",exact:true}).selectOption("dynamic_11");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("เลือก Pipeline คนละตัว");
+});
+test("no winner does not invent recommendation; empty has settings CTA",async({page})=>{
+ await fixtures(page,{clear:false});await page.goto("/matrix");await expect(page.getByTestId("comparison-hero")).toContainText("ยังไม่มี Pipeline ที่ชนะชัดเจน");await expect(page.locator(".comparison-recommended")).toHaveCount(0);await expect(page.locator(".comparison-types")).toContainText("ยังสรุปไม่ได้");
+ await fixtures(page,{empty:true});await page.reload();await expect(page.getByTestId("comparison-hero")).toContainText("ยังไม่มี Pipeline สำหรับเปรียบเทียบ");await expect(page.getByTestId("comparison-hero").getByRole("link",{name:"ไปที่ตั้งค่า Pipeline"})).toHaveAttribute("href","/settings/pipelines");
+});
+test("examples require identical confirmed global field, latest usable pair, never borrow labels",()=>{
+ const c=sample("one");expect(comparisonExamples([c],ids[0],ids[1])).toHaveLength(1);
+ c.global_fields![0].confirmed_at=null;expect(comparisonExamples([c],ids[0],ids[1])).toHaveLength(0);
+ c.global_fields![0].confirmed_at="2026-10-07";c.runs[1].fields![0].global_field_id="different-field";expect(comparisonExamples([c],ids[0],ids[1])).toHaveLength(0);
+ const d=sample("two");d.runs.push({...d.runs[0],created_at:"2026-10-08",status:"error"});expect(comparisonExamples([d],ids[0],ids[1])).toHaveLength(0);
+});
+test("CER above 100 stays honest and all error kinds remain distinguishable",async({page})=>{
+ await fixtures(page,{clear:false});const d=decision(false,false);d.overall.featured_pair!.mean_cer_a=1.5;
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));
+ const c=sample("errors"),e={...evaluation,character_edits:3,spans:[{kind:"equal" as const,text:"ก"},{kind:"substitution" as const,text:"ง",missing:"ข"},{kind:"insertion" as const,text:"จ"},{kind:"deletion" as const,text:"",missing:"ค"}]};c.runs[1].fields![0].evaluation=e;
+ await page.route("**/api/history*",r=>r.fulfill({json:[c]}));await page.route("**/api/test-cases/*",r=>r.fulfill({json:c}));await page.goto("/matrix");
+ await expect(page.getByTestId("comparison-hero")).toContainText("150.0%");const result=page.locator(".comparison-four");for(const kind of ["substitution","insertion","deletion"])await expect(result.locator(`[data-error-type=${kind}]`)).toBeVisible();
+ await page.getByRole("tab",{name:"Error breakdown",exact:true}).click();await expect(page.locator("#comparison-errors dd")).toHaveText(["1","1","1"]);
+ await page.getByRole("tab",{name:"Per-line view",exact:true}).click();await expect(page.locator("#comparison-errors").getByTestId("field-error")).toHaveCount(3);
+});
+test("legacy confirmed whole GT remains readable without saved spans",()=>{
+ const c=sample("legacy");c.evaluation_mode="whole_document";c.ground_truth_raw="กข";c.global_fields=[];c.runs.forEach(r=>{r.fields=[];});
+ const examples=comparisonExamples([c],ids[0],ids[1]);expect(examples).toHaveLength(1);expect(examples[0].gt).toBe("กข");expect(examples[0].evaluationA).toBeNull();
+ c.status="tested";expect(comparisonExamples([c],ids[0],ids[1])).toHaveLength(0);
+});

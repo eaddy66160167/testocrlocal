@@ -3,13 +3,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Cpu, Plus, Save, Settings2, X, Circle, PlugZap, Trash2 } from "lucide-react";
 import { deletePipeline, getOCRModels, saveOCRModel, saveDynamicPipeline, testConnection } from "@/lib/api";
+import {versionLabel} from "@/lib/pipeline-model-label";
 import type { DynamicPipelineInput, OCRModel, PipelineConfig } from "@/types";
 
 const messageOf = (e: unknown) => e instanceof Error ? e.message : "ไม่สามารถบันทึกได้ กรุณาลองอีกครั้ง";
-const versionLabel = (version: string, kind: OCRModel["kind"], source: OCRModel["source"]) => {
-  if(source === "official") return kind === "det" && version === "6" ? "PP-OCRv6_medium_det" : kind === "rec" && version === "5" ? "th_PP-OCRv5_mobile_rec" : `PPOCR${version}_${kind}`;
-  return version === "5" && kind === "det" ? "PPOCR5_server_det" : `PPOCR${version}_${kind}`;
-};
 
 function initial(p: PipelineConfig | undefined, models: OCRModel[]): DynamicPipelineInput {
   const selected = (kind: "det" | "rec") => {

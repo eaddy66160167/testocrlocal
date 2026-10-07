@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison, getMatrix, getPipelines } from "@/lib/api";
 import { useAnalyticsFilters, useComparisonDisplay } from "@/lib/analytics-scope";
 import ComparisonFilters from "@/components/ComparisonFilters";
+import {currentComparisonNames} from "@/lib/comparison-identity";
 import {ByType} from "@/components/ComparisonDecision";
 import { ComparisonHero, PipelineRanking, DocumentTypeWinners, PipelineSideBySide } from "@/components/ComparisonDashboard";
 import type {Comparison} from "@/types/comparison";
@@ -18,7 +19,6 @@ import type {
 } from "@/types";
 import { percent } from "@/components/MatrixTable";
 import {
-  PageHeader,
   LoadingState,
   EmptyState,
 } from "@/components/ConsoleUI";
@@ -44,6 +44,11 @@ export default function MatrixPage() {
     filters.date_to &&
     filters.date_from > filters.date_to
   );
+  useEffect(()=>{
+    const refresh=()=>setRevision(n=>n+1);
+    window.addEventListener("focus",refresh);
+    return()=>window.removeEventListener("focus",refresh);
+  },[]);
   useEffect(() => {
     let active = true;
     async function load() {
@@ -68,7 +73,7 @@ export default function MatrixPage() {
             setPipelines(p);
             setSummary(s);
             // Current names/settings are authoritative. Historical identities retain their saved names.
-            setDecision({...d,pipelines:d.pipelines.map(p=>({...p,pipeline_name:config.find(c=>c.pipeline_id===p.pipeline_id)?.name??p.pipeline_name}))});
+            setDecision(currentComparisonNames(d,config));
             setConfigs(config);
             setMatrix(m);
           }
@@ -103,22 +108,8 @@ export default function MatrixPage() {
   };
   return (
     <div className="page-stack comparison-page">
-      <PageHeader
-        title="OCR Pipeline Comparison"
-        description="เปรียบเทียบ OCR Pipeline จากผลทดสอบบนเอกสารจริง"
-        actions={
-          <button
-            className="button secondary"
-            disabled={loading}
-            onClick={() => setRevision((n) => n + 1)}
-          >
-            <RefreshCw size={16} />
-            รีเฟรช
-          </button>
-        }
-      />
-      <div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="flex gap-2"><button role="tab" aria-selected={display.view === "overall"} className={`button ${display.view === "overall" ? "primary" : "secondary"}`} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} className={`button ${display.view === "by-type" ? "primary" : "secondary"}`} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div>
-      <ComparisonFilters value={filters} onChange={v=>{setFilters(v);setOffset(0);}} pipelines={pipelines} archived={display.includeArchived} onArchived={v=>display.update("include_archived",v?"1":"")} search={search} onSearch={setSearch} onReset={()=>{setFilters({});setSearch("");setOnlyGT(false);setOffset(0);}}/>
+      <div className="comparison-top"><div><h1>OCR Pipeline Comparison</h1><p>เปรียบเทียบ OCR Pipeline จากผลทดสอบบนเอกสารจริง</p></div><ComparisonFilters value={filters} onChange={v=>{setFilters(v);setOffset(0);}} pipelines={pipelines} archived={display.includeArchived} onArchived={v=>display.update("include_archived",v?"1":"")} search={search} onSearch={setSearch} onReset={()=>{setFilters({});setSearch("");setOnlyGT(false);setOffset(0);}}/></div>
+      <div className="comparison-section-head"><div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="comparison-tabs"><button role="tab" aria-selected={display.view === "overall"} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div><button className="button secondary" disabled={loading} onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>รีเฟรช</button></div>
       {invalid && (
         <p className="error-banner" role="alert">
           วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น

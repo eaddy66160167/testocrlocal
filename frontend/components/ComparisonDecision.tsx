@@ -61,7 +61,7 @@ export function DecisionOverview({data}:{data:Comparison}){
  {!empty&&<details className="panel panel-body"><summary className="cursor-pointer font-semibold">รายละเอียดเพิ่มเติม</summary><details className="my-3"><summary className="cursor-pointer">หลักฐานเชิงสถิติ</summary><p>พร้อมเทียบ {r.x} จาก {r.y} ชุด · {r.documents} เอกสาร</p><p>รอ GT {r.reasons.missing_gt} · ยังไม่รัน {r.reasons.not_run} · รันไม่สำเร็จ {r.reasons.failed} · ไม่เข้าเกณฑ์อื่น {r.reasons.other}</p><PairDetail decision={d} identities={data.pipelines}/></details><details className="my-3"><summary className="cursor-pointer">ความแม่นยำ × เวลา</summary><Scatter decision={d}/></details><details><summary className="cursor-pointer">เปรียบเทียบทุก Pipeline</summary><PairTable pairs={[...d.pairs,...d.historical_pairs]} identities={data.pipelines}/></details></details>}
  </>;
 }
-function Scatter({decision}:{decision:Decision}){
+export function Scatter({decision}:{decision:Decision}){
  const s=decision.scatter, points=s.points.filter(p=>p.cer!==null&&p.time_seconds!==null);
  const maxX=Math.max(1,...points.map(p=>p.time_seconds!))*1.15,maxY=Math.max(.01,...points.map(p=>p.cer!))*1.15;
  const x=(n:number)=>70+n/maxX*580,y=(n:number)=>285-n/maxY*220;
