@@ -10,7 +10,7 @@ import { assetUrl, cropUrl, getTestCase } from "@/lib/api";
 import { comparisonExamples, type ComparisonExample } from "@/lib/comparison-examples";
 import { percent } from "@/components/MatrixTable";
 import { PairDetail, Scatter, verdict } from "@/components/ComparisonDecision";
-import {versionLabel} from "@/lib/pipeline-model-label";
+import {pipelineModelDisplay} from "@/lib/pipeline-model-label";
 import ErrorAnalysisText from "@/components/ErrorAnalysisText";
 
 const speed = (ms: number | null | undefined) => ms == null ? "—" : `${(ms/1000).toLocaleString("en",{maximumFractionDigits:2})} sec`;
@@ -52,9 +52,8 @@ export function ComparisonHero({data,rows,onCompare}:{data:Comparison;rows:Matri
 function PipelineDetails({config}:{config?:PipelineConfig}) {
   if(!config)return <p className="filter-note">ข้อมูลในอดีต · ไม่มีการตั้งค่าปัจจุบัน</p>;
   return <details className="comparison-model"><summary><Info size={13}/> Model details</summary><p>Pipeline ID: <code>{config.pipeline_id}</code></p><p>Engine: {config.source ?? config.engine ?? "—"} · {config.execution_mode ?? "—"}</p>{(["det","rec"] as const).map(kind=>{
-    const m=kind==="det"?config.det_model:config.rec_model;
-    const version=m?.version??config.integrated_options?.version??(config.source==="official"&&config.execution_mode==="integrated"?(kind==="det"?"6":"5"):null);
-    return <div key={kind}><strong>{kind==="det"?"Text Detection":"Text Recognition"}</strong><p>{m?.name ?? (version?versionLabel(version,kind,config.source??"custom"):"ไม่มีข้อมูลโมเดลที่เลือก")}</p><p>Version: {version ?? "—"} · Weight: {m?.weight ?? (kind==="det"?config.integrated_options?.det_weight:config.integrated_options?.rec_weight) ?? (config.source==="official"?"default":"—")}</p></div>;
+    const m=pipelineModelDisplay(config,kind);
+    return <div key={kind}><strong>{kind==="det"?"Text Detection":"Text Recognition"}</strong><p>{m.name}</p><p>Version: {m.version ?? "—"} · Weight: {m.weight ?? "—"}</p></div>;
   })}</details>;
 }
 
@@ -105,7 +104,9 @@ export function PipelineSideBySide({data,cases,pair,setPair,onNextPage,hasNext}:
     return ()=>{active=false;};
   },[caseId,retry]);
   const hydrated=detail && candidate && detail.id===candidate.testCase.id?comparisonExamples([detail],...pair).find(e=>e.key===candidate.key):null;
-  const example=hydrated??candidate;
+  // A current detail response can invalidate eligibility (GT cleared or run failed).
+  // Never replace that authoritative result with a stale history example.
+  const example=detail && candidate && detail.id===candidate.testCase.id ? hydrated ?? null : candidate;
   const p=[...data.overall.pairs,...data.overall.historical_pairs].find(p=>[p.a,p.b].includes(pair[0])&&[p.a,p.b].includes(pair[1])&&pair[0]!==pair[1]);
   const navigate=(key:string)=>setSelected(key);
   return <><section className="comparison-card" id="compare-results" aria-label="เปรียบเทียบสอง Pipeline โดยตรง"><div className="comparison-section-head"><div><h2><Scale/> Compare Results</h2><p className="comparison-subtitle">ดูตัวอย่างผลลัพธ์ของแต่ละ Pipeline แบบ side-by-side</p></div><div className="comparison-pair-controls">

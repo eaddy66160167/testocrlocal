@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Cpu, Plus, Save, Settings2, X, Circle, PlugZap, Trash2 } from "lucide-react";
 import { deletePipeline, getOCRModels, saveOCRModel, saveDynamicPipeline, testConnection } from "@/lib/api";
-import {versionLabel} from "@/lib/pipeline-model-label";
+import {versionLabel, pipelineModelDisplay} from "@/lib/pipeline-model-label";
 import type { DynamicPipelineInput, OCRModel, PipelineConfig } from "@/types";
 
 const messageOf = (e: unknown) => e instanceof Error ? e.message : "ไม่สามารถบันทึกได้ กรุณาลองอีกครั้ง";
@@ -132,19 +132,10 @@ function DynamicCard({ pipeline, models, onSaved }: { pipeline: PipelineConfig; 
   async function remove(){if(deleting)return;setDeleting(true);setDeleteError("");try{await deletePipeline(pipeline.pipeline_id);onSaved();}catch(e){setDeleteError(messageOf(e));}finally{setDeleting(false);}}
   const [editing, setEditing] = useState(false), [testing, setTesting] = useState(false), [message, setMessage] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const opts = pipeline.integrated_options;
   const ready = status === "gateway_connected" && pipeline.enabled && !testing;
   const statusText = !pipeline.enabled ? "ปิดใช้งาน" : testing ? "กำลังทดสอบ Gateway…" : ready ? "พร้อมใช้งาน · Gateway" : status ? "เชื่อมต่อไม่สำเร็จ" : "ยังไม่ได้ทดสอบ Gateway";
   function modelText(kind: "det" | "rec") {
-    const model = kind === "det" ? pipeline.det_model : pipeline.rec_model;
-    if (model) return `${model.name} / ${model.weight}`;
-    if (pipeline.execution_mode === "integrated") {
-      if (pipeline.source === "official") return opts?.paddle_model_defaults === false
-        ? `${versionLabel(opts[`${kind}_version`] || "—", kind, "official")} / ${opts[`${kind}_weight`]}`
-        : "ตามค่า env ของ Gateway";
-      return `V${opts?.version || "—"} / ${kind === "det" ? opts?.det_weight || "—" : opts?.rec_weight || "—"}`;
-    }
-    return "ไม่ได้เลือกโมเดล";
+    return pipelineModelDisplay(pipeline, kind).summary;
   }
   async function check() {
     setTesting(true); setMessage(""); setStatus(null);

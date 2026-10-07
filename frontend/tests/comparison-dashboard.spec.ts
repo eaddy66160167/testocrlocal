@@ -3,6 +3,7 @@ import fs from "node:fs";
 import type {Comparison,Identity} from "../types/comparison";
 import type {TestCase,FieldComparison,PipelineConfig} from "../types";
 import {comparisonExamples} from "../lib/comparison-examples";
+import {pipelineModelDisplay} from "../lib/pipeline-model-label";
 
 const ids=["dynamic_a","dynamic_b","disabled_old"];
 const names=["โมเดลทดสอบ A · ชื่อจาก Pipeline Settings", "โมเดลทดสอบ B", "Archived configuration"];
@@ -77,4 +78,50 @@ test("legacy confirmed whole GT remains readable without saved spans",()=>{
  const c=sample("legacy");c.evaluation_mode="whole_document";c.ground_truth_raw="กข";c.global_fields=[];c.runs.forEach(r=>{r.fields=[];});
  const examples=comparisonExamples([c],ids[0],ids[1]);expect(examples).toHaveLength(1);expect(examples[0].gt).toBe("กข");expect(examples[0].evaluationA).toBeNull();
  c.status="tested";expect(comparisonExamples([c],ids[0],ids[1])).toHaveLength(0);
+});
+
+test("official configuration display follows separate DET/REC selections, not pipeline name",async({page})=>{
+ await fixtures(page);
+ const official={...configs[0],source:"official",execution_mode:"integrated",name:"Display name says REC V6 but config selects V5",det_model:null,rec_model:null,integrated_options:{paddle_model_defaults:false,det_version:"6",rec_version:"5",det_weight:"baseline",rec_weight:"thai_ft_v1"}} as PipelineConfig;
+ await page.route("**/api/pipelines",r=>r.fulfill({json:[official,configs[1]]}));
+ await page.goto("/matrix");
+ const row=page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr").first();
+ await row.locator("summary").click();
+ await expect(row).toContainText("PP-OCRv6_medium_det");
+ await expect(row).toContainText("th_PP-OCRv5_mobile_rec");
+ await expect(row).toContainText("Version: 5 · Weight: thai_ft_v1");
+ const defaults={...official,integrated_options:{...official.integrated_options!,paddle_model_defaults:true}};
+ expect(pipelineModelDisplay(defaults,"rec").version).toBeNull();
+ expect(pipelineModelDisplay(defaults,"rec").summary).toBe("ตามค่า env ของ Gateway");
+});
+
+test("examples retain canonical OCR order and GT evaluation prediction",()=>{
+ const c=sample("order");c.evaluation_mode="whole_document";c.ground_truth_raw="Left Right\nNext row";
+ c.runs[0].final_text="Left Right\nNext row";
+ c.runs[0].document_evaluation={...evaluation,prediction:"Left Right Next row",mode:"whole_document",evaluated_at:"2026-10-07T00:00:00Z"};
+ expect(comparisonExamples([c],ids[0],ids[1])[0].textA).toBe("Left Right Next row");
+ c.runs[0].document_evaluation=null;
+ expect(comparisonExamples([c],ids[0],ids[1])[0].textA).toBe("Left Right\nNext row");
+ c.evaluation_mode="per_field";c.global_fields![0].confirmed_at=null;
+ expect(comparisonExamples([c],ids[0],ids[1])).toEqual([]);
+});
+
+for(const state of ["no OCR", "no GT", "no matched pair"])test(`comparison empty state: ${state}`,async({page})=>{
+ await fixtures(page);
+ const c=sample("empty-example");
+ if(state==="no OCR")c.runs=[];
+ if(state==="no GT")c.global_fields![0].confirmed_at=null;
+ if(state==="no matched pair")c.runs=c.runs.slice(0,1);
+ await page.route("**/api/history*",r=>r.fulfill({json:[c]}));
+ await page.goto("/matrix");
+ await expect(page.locator("#compare-results .comparison-empty")).toBeVisible();
+ await expect(page.locator(".comparison-four")).toHaveCount(0);
+});
+
+test("fresh detail eligibility overrides stale history GT",async({page})=>{
+ await fixtures(page);const c=sample("first");c.global_fields![0].confirmed_at=null;
+ await page.route("**/api/test-cases/first",r=>r.fulfill({json:c}));
+ await page.goto("/matrix");
+ await expect(page.locator("#compare-results .comparison-empty")).toBeVisible();
+ await expect(page.locator(".comparison-four")).toHaveCount(0);
 });

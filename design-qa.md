@@ -35,9 +35,11 @@ Expected departures from the illustrative reference: existing navigation/view ta
 ## Validation
 
 - Frontend typecheck, ESLint and production build: pass.
-- Relevant Playwright suites: **29 passed** (Comparison dashboard, analytics/scope regressions, adjacent History/Dataset bulk workflows).
+- Relevant Playwright suites after upstream integration: **51 passed** (Comparison dashboard, analytics/scope, dynamic/Official Settings, global comparison, GT sync, preview/selection, error lines, and History/Dataset bulk workflows).
 - Final viewport capture checks: **4 passed**, at 1440/1024/768/390px; no horizontal page overflow.
-- Backend comparison/analytics regression suites: **35 passed**; backend code unchanged.
+- Backend focused regression suites: **84 passed, 1 skipped** (PostgreSQL unavailable); backend code unchanged relative to the integration base.
+- Full backend suite: **217 passed, 51 failed, 5 skipped**. An isolated `origin/main` checkout reproduced exactly the same 51 failing test names. These include legacy built-in pipeline/log persistence expectations; they were not removed or weakened to hide upstream baseline failures.
+- Ruff: **11 existing import-order errors** in unchanged backend files. No backend cleanup was mixed into this frontend integration.
 - Private credential scan and `git diff --check`: pass; `.env` ignored/untracked.
 
 ## Operational scope
@@ -47,4 +49,16 @@ Expected departures from the illustrative reference: existing navigation/view ta
 - Historical whole-document results without stored spans remain readable, with no invented alignment. They display saved metrics and plain OCR text.
 - Native backend integration was not rerun against PostgreSQL in this UI task; Docker Desktop was unavailable. Browser acceptance used mocked API contracts and the existing pytest test harness.
 
-final result: passed
+## Safe upstream integration
+
+- Base: `a4272660645534de8cecfb7e6946870db7f9ebdc`, fetched from `origin/main`.
+- Backup: `backup/ocr-comparison-before-sync`, preserving `1526ede` and safety commit `bf9afcd`.
+- Integration: `feature/ocr-comparison-redesign-sync`; both redesign commits cherry-picked without textual conflicts.
+- Official Paddle display was adapted to current `det_version`, `rec_version`, weights and `paddle_model_defaults`. Settings and Comparison share one read-only display utility; upstream form/routing behavior remains intact.
+- Removed the redesign's old inferred Official DET V6 / REC V5 defaults. No configuration is parsed from a display name.
+- Backend, shared types, preview/order helpers, migrations, environment and deployment files are identical to upstream. DET/REC pairs are not sorted independently in Comparison.
+- A fresh detail response that invalidates confirmed GT now overrides stale history eligibility. A regression test prevents showing outdated paired labels.
+- Examples remain view models of canonical API records; no frontend alignment engine or new payload persistence was added.
+- No hardcoded reference metrics or production demo records were found. Test fixtures remain explicitly synthetic.
+
+Review status: **SAFE TO REVIEW** with the disclosed upstream test/lint debt. Not declared safe to merge. PostgreSQL-native E2E remains unverified because the Docker daemon is unavailable. Non-blocking framework warnings include test-client deprecations and Next Image aspect-ratio warnings in fixture captures.
