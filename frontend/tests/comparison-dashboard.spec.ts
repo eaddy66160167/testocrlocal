@@ -125,3 +125,38 @@ test("fresh detail eligibility overrides stale history GT",async({page})=>{
  await expect(page.locator("#compare-results .comparison-empty")).toBeVisible();
  await expect(page.locator(".comparison-four")).toHaveCount(0);
 });
+
+for(const field of [true,false])test(`paired, overall and ${field?"field":"document"} CER have distinct scopes`,async({page})=>{
+ await fixtures(page);
+ const d=decision();d.overall.featured_pair!.mean_cer_a=.031;d.overall.featured_pair!.mean_cer_b=.142;d.overall.featured_pair!.mean_dcer_pp=-11.1;
+ d.overall.cells[0].cer=.087;
+ d.by_type[0].decision={...d.overall,featured_pair:{...d.overall.featured_pair!,mean_cer_a:.024}};
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));
+ const c=sample("scope");
+ if(!field){c.evaluation_mode="whole_document";c.ground_truth_raw="กข";c.global_fields=[];}
+ await page.route("**/api/history*",r=>r.fulfill({json:[c]}));await page.route("**/api/test-cases/*",r=>r.fulfill({json:c}));
+ await page.goto("/matrix");
+ const hero=page.getByTestId("comparison-hero");
+ const paired=hero.locator(".comparison-metric").filter({hasText:"Paired CER"});
+ await expect(paired).toContainText("3.1%");await expect(paired).toContainText("เอกสารที่คู่หลักมีผลพร้อมเทียบ");
+ const ranking=page.getByRole("table",{name:"All Pipelines"});
+ await expect(ranking.getByRole("columnheader",{name:"Overall CER ↓",exact:true})).toBeVisible();
+ await expect(ranking.locator('tbody tr').first().locator('[data-label="Overall CER"]')).toHaveText("8.7%");
+ await expect(page.locator(".comparison-ranking")).toContainText("จึงอาจต่างจาก Paired CER");
+ await expect(page.locator(".comparison-four footer").first()).toContainText(`${field?"This field CER":"This document CER"} 0.0%`);
+ await expect(page.getByTestId("hero-paired-evidence")).toContainText("14.2%");await expect(page.getByTestId("hero-paired-evidence")).toContainText("-11.10 pp");
+ await expect(page.locator(".comparison-types")).toContainText("Type paired CER");await expect(page.locator(".comparison-types")).toContainText("2.4%");
+ await expect(page.locator(".comparison-disagreement-heading")).toContainText("Example CER");
+ await expect(page.locator("#comparison-errors")).toContainText(field?"This field":"This document");
+});
+
+for(const state of ["Strong","Moderate","Limited","Insufficient"] as const)test(`evidence strength ${state} follows paired verdict and minimum`,async({page})=>{
+ await fixtures(page);const d=decision(false,state==="Strong");
+ if(state==="Limited"){d.overall.featured_pair!.documents=3;d.overall.featured_pair!.verdict="insufficient";}
+ if(state==="Insufficient"){d.overall.featured_pair=null;d.overall.readiness.valid_pair=false;}
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.goto("/matrix");
+ await expect(page.getByTestId("evidence-strength")).toHaveText(state);
+ await expect(page.locator(".comparison-evidence")).toContainText("ขั้นต่ำ 5");
+ await expect(page.getByRole("img",{name:/ระดับหลักฐานจากเอกสาร/})).toHaveAttribute("title",/ไม่ใช่ Model confidence/);
+ if(state!=="Strong")await expect(page.getByTestId("evidence-strength")).not.toHaveText("Strong");
+});

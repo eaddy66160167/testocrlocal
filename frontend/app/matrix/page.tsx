@@ -209,7 +209,7 @@ export default function MatrixPage() {
                                   ) : (
                                     <>
                                       <strong>
-                                        CER {percent(r.metrics?.cer)}
+                                        CER ของชุดทดสอบนี้ {percent(r.metrics?.cer)}
                                       </strong>
                                       <span className="row-meta">
                                         WER {percent(r.metrics?.wer)} · Exact{" "}

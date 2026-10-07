@@ -62,3 +62,31 @@ Expected departures from the illustrative reference: existing navigation/view ta
 - No hardcoded reference metrics or production demo records were found. Test fixtures remain explicitly synthetic.
 
 Review status: **SAFE TO REVIEW** with the disclosed upstream test/lint debt. Not declared safe to merge. PostgreSQL-native E2E remains unverified because the Docker daemon is unavailable. Non-blocking framework warnings include test-client deprecations and Next Image aspect-ratio warnings in fixture captures.
+
+## Final metric-scope polish
+
+The layout, CSS, model configuration, ordering, API contracts and decision engine were retained. No attempt was made to make unrelated statistical scopes numerically equal.
+
+| Surface | Visible metric | Exact scope and API source |
+| --- | --- | --- |
+| Recommendation Hero | Paired CER | `/api/analytics/comparison`: `overall.featured_pair.mean_cer_a/b` for the displayed leader; only records with eligible evaluations for both members of the featured pair. Average case CER within each source Document, then average Documents. PDF pages share one Document. |
+| Hero paired explanation | Paired CER A/B, A − B pp | The same featured pair's means and `mean_dcer_pp`, with both current configuration names and matched Document count. |
+| All Pipelines | Overall CER | Comparison `overall.cells[].cer`: each pipeline's own eligible records in the filters, averaged within source Document then across Documents. These documents need not match the featured pair. Ranking still comes from the paired engine. |
+| Best by Document Type | Type paired CER | `by_type[].decision.featured_pair.mean_cer_a/b` for that type's recommended pipeline only. No recommendation means no inferred winner/CER. The API's virtual `all` group refers to all types. |
+| By-type expanded table | Type overall CER | `by_type[].decision.cells[].cer`: descriptive Document mean for each pipeline within the group, not the winner's paired cohort. |
+| Compare Results | This field CER / This document CER | Detail/history records via `comparisonExamples`: `OCRField.evaluation.cer` for the same confirmed global field; otherwise `document_evaluation.cer`, with historical `run.metrics.cer` fallback. Applies to this selected example, not the aggregate pipeline. A PDF whole-document example is the saved test on the selected page, not an aggregate across the PDF. |
+| Disagreement Examples | Example CER; absolute difference pp | Those same example-local A/B CER values from the current History page. Hover context distinguishes field/document. The full-scope action list remains separate and can involve another pair; its spread comes from `actions.largest_spread[].spread` across active eligible pipeline results on a saved test. |
+| Error Analysis | Character diff / error character counts | Current example's Pipeline B `FieldComparison.spans`; counts are code points of substitution/insertion text or deletion missing text, not counts of grouped spans. No new alignment algorithm. |
+| Advanced paired tables | Paired CER A/B | Each pair's own means; historical pairs remain separate from active recommendation. |
+| Advanced scatter | CER with common/own context | `scatter.points[].cer`: common eligible records across all active pipelines if backend common-document threshold is met, otherwise each pipeline's own records; inactive pipelines always use own records. Existing context/legend retained. |
+| Saved-test table / advanced selected-run metrics | Saved test CER / WER / Exact Match | `run.metrics` according to that test's evaluation mode; this can aggregate several confirmed Fields. It is explicitly separate from the selected Field example. |
+
+Hero and All Pipelines intentionally do **not** share a cohort: the featured pair and each pipeline's eligible document set differ, especially with three or more pipelines or incomplete coverage. Scope labels explain that difference without changing the backend.
+
+Speed remains arithmetic average from `/api/matrix` `avg_time_ms`: latest eligible successful results per saved test with timing, within the filters, including results without confirmed GT. Reliability uses the same API's `successful_runs / tests` over latest eligible results in the filters; it is not all retry attempts and not restricted to the paired cohort. Tested Documents in the Hero is `featured_pair.documents`; ranking counts are `cells[].documents`. Test-case counts remain “ชุดทดสอบ”, not relabeled as regions.
+
+Evidence presentation is deterministic: no valid nonempty featured pair → Insufficient; fewer than `minimum_documents` or verdict `insufficient` → Limited; minimum met, verdict `clear`, matching pair winner and overall recommendation → Strong; other sufficient paired evidence → Moderate. These states describe the comparison evidence, not upstream Model Confidence. A focusable info icon exposes this distinction and current/required Document counts remain visible.
+
+Model details still use the read-only `pipelineModelDisplay` helper and current `/api/pipelines` configuration. Official/custom routing and Settings semantics were untouched. Character errors retain canonical spans, distinct styling, titles and accessible text.
+
+Validation for this pass: typecheck, ESLint and production build passed; 57 relevant Playwright tests passed, including six new scope/evidence cases; focused backend comparison/analytics: 35 passed (two pre-existing dependency deprecations). Responsive screenshots at 1440/1024/768/390px retain the existing composition and have no horizontal page overflow. Full backend and Ruff were not rerun: the established unrelated baseline remains documented above. No commit, push, deployment or production change was performed in this polish pass.
