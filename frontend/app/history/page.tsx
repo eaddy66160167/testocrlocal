@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Plus } from "lucide-react";
 import { getHistory, getAnalyticsPipelines, bulkDeleteTestCases } from "@/lib/api";
-import { useAnalyticsFilters, analyticsHref } from "@/lib/analytics-scope";
+import { useAnalyticsFilters } from "@/lib/analytics-scope";
 import AnalyticsFilters from "@/components/AnalyticsFilters";
 import { t, userError, pipelineLabel } from "@/lib/i18n/th";
 import type { TestCase, AnalyticsPipeline, QueryFilters } from "@/types";
@@ -91,7 +91,7 @@ export default function HistoryPage() {
         description="ค้นหาเอกสาร เปิดผลล่าสุด และจัดการชุดทดสอบที่บันทึกไว้"
         actions={
           <>
-            <Link className="button secondary" href={analyticsHref("/matrix", filters)}>เปรียบเทียบผล</Link>
+            <Link className="button secondary" href="/matrix">เปรียบเทียบผล</Link>
             <button
               className="button secondary"
               aria-label={t("Refresh history")}
@@ -196,7 +196,7 @@ export default function HistoryPage() {
                     <th><input type="checkbox" aria-label="เลือกประวัติที่เห็นในหน้านี้ทั้งหมด" checked={selection.all(visible.map(c=>c.id))} onChange={()=>selection.page(visible.map(c=>c.id))}/></th>
                     {[
                       "เอกสาร / หน้า",
-                      "วันที่สร้างชุดทดสอบ (UTC)",
+                      "วันที่สร้าง",
                       "ประเภทเอกสาร",
                       "สถานะ",
                       "ผลล่าสุดตาม Pipeline",

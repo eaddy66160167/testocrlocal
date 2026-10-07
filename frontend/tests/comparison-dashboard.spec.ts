@@ -4,6 +4,8 @@ import type {Comparison,Identity} from "../types/comparison";
 import type {TestCase,FieldComparison,PipelineConfig} from "../types";
 import {comparisonExamples} from "../lib/comparison-examples";
 import {pipelineModelDisplay} from "../lib/pipeline-model-label";
+import {minimumCer, testMinimumCer} from "../components/BestCer";
+import {pipelineColor} from "../components/AccuracySpeedChart";
 
 const ids=["dynamic_a","dynamic_b","disabled_old"];
 const names=["โมเดลทดสอบ A · ชื่อจาก Pipeline Settings", "โมเดลทดสอบ B", "Archived configuration"];
@@ -52,7 +54,7 @@ test("N pipeline settings, archived visibility and manual pair keep decision int
  await fixtures(page,{count:12});await page.goto("/matrix");const hero=page.getByTestId("comparison-hero"),before=await hero.innerText();
  await expect(page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr")).toHaveCount(11);
  await page.getByRole("combobox",{name:"Pipeline A",exact:true}).selectOption("dynamic_11");await expect(hero).toHaveText(before,{useInnerText:true});
- await page.getByRole("checkbox",{name:"Active pipelines only"}).uncheck();await expect(page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr")).toHaveCount(12);await expect(hero).toHaveText(before,{useInnerText:true});
+ await expect(page.getByRole("checkbox",{name:"Active pipelines only"})).toHaveCount(0);await expect(page.getByRole("table",{name:"All Pipelines"}).locator("tbody tr")).toHaveCount(11);await expect(hero).toHaveText(before,{useInnerText:true});
  await page.getByRole("combobox",{name:"Pipeline B",exact:true}).selectOption("dynamic_11");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("เลือก Pipeline คนละตัว");
 });
 test("no winner does not invent recommendation; empty has settings CTA",async({page})=>{
@@ -186,4 +188,71 @@ for(const state of ["Strong","Moderate","Limited","Insufficient"] as const)test(
  await expect(page.locator(".comparison-evidence")).toContainText("ขั้นต่ำ 5");
  await expect(page.getByRole("img",{name:/ระดับหลักฐานจากเอกสาร/})).toHaveAttribute("title",/ไม่ใช่ Model confidence/);
  if(state!=="Strong")await expect(page.getByTestId("evidence-strength")).not.toHaveText("Strong");
+});
+
+test("Comparison ignores old query scope and shows no filters or pair tables",async({page})=>{
+ const requests:URL[]=[];page.on("request",r=>{const u=new URL(r.url());if(u.pathname.startsWith("/api/"))requests.push(u);});
+ await fixtures(page);await page.goto("/matrix?document_type_id=old&pipeline=disabled_old&date_from=2020-01-01&date_to=2020-02-01&include_archived=1&search=hidden");
+ await expect(page.getByTestId("comparison-hero")).toContainText(names[0]);
+ await expect.poll(()=>new URL(page.url()).search).toBe("");
+ for(const label of ["ประเภทเอกสาร (ธุรกิจ)","ช่วงเวลา","Pipeline"]){await expect(page.getByRole("combobox",{name:label,exact:true})).toHaveCount(0);}
+ await expect(page.getByRole("checkbox",{name:"Active pipelines only"})).toHaveCount(0);await expect(page.getByRole("button",{name:"Filters",exact:true})).toHaveCount(0);
+ expect(requests.length).toBeGreaterThan(0);for(const u of requests)for(const key of ["document_type_id","pipeline","date_from","date_to","search"])expect(u.searchParams.has(key)).toBe(false);
+ await page.getByText("Advanced evaluation details",{exact:true}).click();
+ await expect(page.getByText("รายละเอียดการเทียบเป็นคู่",{exact:true})).toHaveCount(0);await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"})).toHaveCount(0);
+ await expect(page.getByRole("combobox",{name:"Pipeline A",exact:true})).toBeVisible();
+});
+
+test("unassigned is excluded everywhere and only minimum descriptive type CER is highlighted",async({page})=>{
+ await fixtures(page);const d=decision(false,false);d.overall.cells[0].cer=.037;d.overall.cells[1].cer=.042;
+ d.by_type.push({...d.by_type[0],code:"unassigned",name:"Unassigned must stay hidden"});
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.goto("/matrix");
+ await expect(page.locator(".comparison-types")).not.toContainText("Unassigned must stay hidden");
+ await page.getByRole("tab",{name:"ตามประเภทเอกสาร",exact:true}).click();await expect(page.locator("main")).not.toContainText("Unassigned must stay hidden");
+ await page.getByText("ดูตารางทุก Pipeline",{exact:true}).click();const row=page.getByRole("table",{name:"เปรียบเทียบตามประเภทเอกสาร"}).locator("tbody tr").first();
+ await expect(row.locator(".comparison-cer-best")).toHaveCount(1);await expect(row.locator(".comparison-cer-best")).toContainText("Type overall CER 3.7%");
+ await expect(row.locator(".comparison-best-badge")).toHaveText("CER ต่ำสุด");await expect(row.locator(".badge.info")).toHaveCount(0);
+});
+
+for(const tied of [false,true])test(`per-test minimum CER excludes failures and missing runs in both views: tie=${tied}`,async({page})=>{
+ await fixtures(page,{count:7});const d=decision();d.pipelines=Array.from({length:7},(_,i)=>({pipeline_id:`p${i}`,pipeline_name:`Configured ${i}`,active:true,retired:false}));
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));const c=sample("best-row");
+ c.runs=[.037,tied?.037:.042,.061,.073,null,.038,.001].flatMap((cer,i)=>cer===null?[]:[{...c.runs[0],id:`r${i}`,pipeline_id:`p${i}`,status:i===6?"error":"success",metrics:{cer,wer:1,exact_match:false}}]);
+ await page.route("**/api/history*",r=>r.fulfill({json:[c]}));await page.goto("/matrix");
+ for(const view of ["สรุปผล","ตามประเภทเอกสาร"]){
+  await page.getByRole("tab",{name:view,exact:true}).click();const summary=page.locator("details>summary").filter({hasText:"เปรียบเทียบรายชุดทดสอบ"});if(!await summary.locator("..").evaluate(e=>e.hasAttribute("open")))await summary.click();
+  const row=page.getByRole("table",{name:"เปรียบเทียบรายชุดทดสอบ"}).locator("tbody tr");
+  await expect(row.locator(".comparison-cer-best")).toHaveCount(tied?2:1);await expect(row.locator(".comparison-best-badge")).toHaveText(tied?["ร่วมดีที่สุด","ร่วมดีที่สุด"]:["ดีที่สุดในเอกสารนี้"]);
+  await expect(row.locator("td").nth(6)).not.toHaveClass(/comparison-cer-best/);await expect(row.locator(".comparison-cer-error")).toContainText("ประมวลผลไม่สำเร็จ");await expect(row.locator(".comparison-cer-missing")).toContainText("ยังไม่ทดสอบ");
+ }
+});
+
+test("CER minima accept zero, ignore invalid values, and stable colors follow identity",()=>{
+ expect(minimumCer([null,NaN,Infinity,-1,0,.01])).toEqual({minimum:0,tied:false});expect(minimumCer([.037,.037])).toEqual({minimum:.037,tied:true});
+ const c=sample("error");c.runs.forEach(r=>r.status="error");expect(testMinimumCer(c,ids).minimum).toBeNull();
+ expect(pipelineColor(ids[0])).toBe(pipelineColor(ids[0]));expect(new Set(ids.map(pipelineColor)).size).toBe(ids.length);
+});
+
+test("type descriptive ties highlight every minimum without inventing recommendation",async({page})=>{
+ await fixtures(page);const d=decision(false,false);await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.goto("/matrix?view=by-type");await page.getByText("ดูตารางทุก Pipeline",{exact:true}).click();
+ const row=page.getByRole("table",{name:"เปรียบเทียบตามประเภทเอกสาร"}).locator("tbody tr").first();await expect(row.locator(".comparison-cer-best")).toHaveCount(2);await expect(row.locator(".comparison-best-badge")).toHaveText(["ร่วมต่ำสุด","ร่วมต่ำสุด"]);await expect(row.locator(".badge.info")).toHaveCount(0);
+});
+
+for(const width of [1440,1024,768,390])test(`Accuracy Speed axes, grid, identity, legend and backend Pareto ${width}`,async({page})=>{
+ await fixtures(page);const d=decision();d.overall.scatter.pareto_valid=true;d.overall.scatter.points=d.overall.cells.map((c,i)=>({...c,cer:i?.061:.037,time_seconds:i?.9:1.2,filled:true,pareto:true,cohort_mode:"common"}));
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.setViewportSize({width,height:1100});await page.goto("/matrix");
+ await page.getByText("Advanced evaluation details",{exact:true}).click();await page.locator("summary").filter({hasText:"ความแม่นยำ × ความเร็ว"}).click();
+ const chart=page.getByLabel("ความแม่นยำ × ความเร็ว",{exact:true});await expect(chart.getByTestId("chart-axes")).toBeVisible();await expect(chart.getByTestId("chart-grid")).toHaveCount(10);
+ await expect(chart.getByTestId("chart-marker")).toHaveCount(2);await expect(chart.getByTestId("pareto-frontier")).toBeVisible();
+ for(const n of names.slice(0,2))await expect(chart.locator(".comparison-speed-legend")).toContainText(n);
+ await expect(chart.getByTestId("chart-marker").first()).toHaveAttribute("aria-label",/CER.*วินาที.*เอกสาร/);await chart.getByTestId("chart-marker").first().focus();await expect(chart.getByRole("status")).toContainText(names[0]);
+ await expect(chart).toContainText("CER เฉลี่ย (%)");await expect(chart).toContainText("เวลาเฉลี่ยต่อชุดทดสอบ (วินาที)");
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ fs.mkdirSync("../.runtime/comparison-ux",{recursive:true});await chart.screenshot({path:`../.runtime/comparison-ux/chart-${width}.png`});
+});
+
+test("chart keeps incomplete pipelines in legend without inventing points or Pareto",async({page})=>{
+ await fixtures(page);const d=decision();d.overall.scatter.points=d.overall.cells.map(c=>({...c,cer:null,time_seconds:null,filled:false,pareto:true,cohort_mode:"own"}));
+ await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:d}));await page.goto("/matrix");await page.getByText("Advanced evaluation details",{exact:true}).click();await page.locator("summary").filter({hasText:"ความแม่นยำ × ความเร็ว"}).click();
+ await expect(page.locator(".comparison-speed")).toContainText("ยังไม่มีผลที่มีทั้ง CER และเวลา");await expect(page.getByTestId("chart-marker")).toHaveCount(0);await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);await expect(page.locator(".comparison-speed-legend li")).toHaveCount(2);
 });

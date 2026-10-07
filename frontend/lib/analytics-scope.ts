@@ -4,7 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { QueryFilters } from "@/types";
 
 const keys = ["document_type_id", "pipeline", "date_from", "date_to"] as const;
-const paths = ["/history", "/matrix", "/analytics/categories"];
+const paths = ["/history", "/analytics/categories"];
 function subscribe(listener: () => void) {
   window.addEventListener("popstate", listener);
   window.addEventListener("analytics-scope", listener);
@@ -58,6 +58,17 @@ export function useAnalyticsNavigation() {
 export function useComparisonDisplay() {
   const search = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const params = new URLSearchParams(search);
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search);
+    let changed = false;
+    for (const key of [...keys, "category", "document", "include_archived", "search"]) {
+      if (next.has(key)) { next.delete(key); changed = true; }
+    }
+    if (changed) {
+      window.history.replaceState(null, "", `${window.location.pathname}${next.size ? `?${next}` : ""}`);
+      window.dispatchEvent(new Event("analytics-scope"));
+    }
+  }, [search]);
   return {
     view: params.get("view") === "by-type" ? "by-type" : "overall",
     includeArchived: params.get("include_archived") === "1",

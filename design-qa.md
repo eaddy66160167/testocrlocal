@@ -123,3 +123,19 @@ Files in the complete feature diff (none removed):
 - Final polish touched only QA, Matrix metric copy, the two Comparison components and dashboard regression tests. No temporary captures/helpers, `.env`, build output or dependencies are included.
 
 Delivery scope: normal push of the feature branch and PR to `main` only. No main push, merge, deployment, production mutation or backup removal is authorized by this delivery. Review status: **SAFE TO REVIEW**.
+
+## Comparison UX cleanup — 2026-10-07
+
+This is a separate pass based on merged `origin/main` (`1f2b645`), on `feature/comparison-ux-cleanup`. The supplied 1448×1086 inline reference applies **only** to Accuracy × Speed. Its surrounding filters, sidebar, Hero and tables were deliberately not copied. Chart data, names, pipeline count and Pareto membership remain supplied by the application APIs.
+
+History retains its date/filter semantics with simpler labels and a plain `/matrix` link. Comparison requests default active-pipeline scope with no date, document-type, pipeline or search filters. Old scope parameters are removed from its URL; only the view tabs change display. UI rendering omits `unassigned`; backend groups and comparison decisions remain intact. Verbose pairwise tables and their unused legacy overview were removed after checking references; manual A/B selection and compact paired evidence remain.
+
+The chart adapts the reference's axes, subtle grid, numbered colored markers, adjacent legend, blue dashed backend Pareto frontier and bottom-left explanation. Colors follow pipeline identity rather than response ordering. Keyboard focus and hover expose name, CER, average time and evaluated document count. Missing CER/time stays in the legend but produces no invented point. Original page composition, typography and icons are retained; no raster asset is needed for this data visualization.
+
+Visual comparison used the user's inline chart reference and fresh local captures at 1440, 1024, 768 and 390px in ignored `.runtime/comparison-ux/chart-*.png`. Desktop keeps plot/legend side by side; narrower screens stack the legend. Mobile tick labels were enlarged and the X-axis caption uses readable HTML text. Long configured names wrap; page-level overflow checks pass. Font, spacing, color, copy and icon review found no remaining P0/P1 mismatch. Differences from the reference are intentional: actual API values/count, current component location, no surrounding reference-page redesign. The source is inline rather than a local image file, so no fabricated combined comparison artifact is claimed.
+
+Both view tabs share saved-test CER highlighting. Only latest successful results with finite nonnegative CER participate; zero is valid and ties within `1e-10` all receive text plus green accent. Failed/missing runs do not participate. Type-table highlighting uses descriptive Type overall CER; a backend recommendation badge is separate. Neither observed minimum creates a statistical winner.
+
+Validation: typecheck, ESLint and production build **PASS**; relevant Playwright **70/70 PASS** (History, Comparison, dynamic pipelines, Global comparison/selection, GT sync, error lines and bulk History/Dataset); focused backend comparison/analytics **35 PASS**, with two existing dependency deprecations. Full backend and Ruff were not rerun, as requested; unrelated upstream failures are not claimed fixed. Browser tests use deterministic intercepted API fixtures, not a live PostgreSQL end-to-end stack.
+
+Backend, API contracts/types, OCR ordering, batch splitting, evaluation, storage, migrations, secrets and deployment configuration are unchanged. No production deployment or merge is part of this pass.
