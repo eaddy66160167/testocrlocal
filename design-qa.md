@@ -90,3 +90,36 @@ Evidence presentation is deterministic: no valid nonempty featured pair → Insu
 Model details still use the read-only `pipelineModelDisplay` helper and current `/api/pipelines` configuration. Official/custom routing and Settings semantics were untouched. Character errors retain canonical spans, distinct styling, titles and accessible text.
 
 Validation for this pass: typecheck, ESLint and production build passed; 57 relevant Playwright tests passed, including six new scope/evidence cases; focused backend comparison/analytics: 35 passed (two pre-existing dependency deprecations). Responsive screenshots at 1440/1024/768/390px retain the existing composition and have no horizontal page overflow. Full backend and Ruff were not rerun: the established unrelated baseline remains documented above. No commit, push, deployment or production change was performed in this polish pass.
+
+## Final delivery validation
+
+- Fresh fetch confirmed upstream base remains `a4272660645534de8cecfb7e6946870db7f9ebdc`.
+- Integration branch: `feature/ocr-comparison-redesign-sync`.
+- Backup branch remains untouched at `bf9afcd4a174f13df0543ddd359c7e67c0a2c7cf`: `backup/ocr-comparison-before-sync`.
+- Final validated implementation HEAD: `501e0e6d3f29e33b66a0f7448631c0c4e65d5fd1`. This evidence is recorded in a documentation-only follow-up commit; its delivery HEAD is recorded in the PR and can be resolved with `git rev-parse HEAD` (a commit cannot embed its own SHA).
+
+Commands rerun for final delivery on 2026-10-07:
+
+```powershell
+cd frontend
+npm.cmd run typecheck
+npm.cmd run lint
+npm.cmd run build
+$env:E2E_BASE_URL='http://127.0.0.1:3017'
+# Local dev server: npm.cmd run dev -- --port 3017
+npm.cmd run test:e2e -- tests/comparison-dashboard.spec.ts tests/analytics-stage-b.spec.ts tests/dynamic-pipelines.spec.ts tests/global-comparison.spec.ts tests/ground-truth-sync.spec.ts tests/error-analysis-lines.spec.ts tests/global-selection.spec.ts tests/lean-bulk.spec.ts
+cd ../backend
+.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider --basetemp ../.runtime/final-comparison-pytest tests/test_comparison_decision.py tests/test_analytics_scope.py
+```
+
+Results: typecheck **PASS**, ESLint **PASS**, production build **PASS**, relevant Playwright **57/57 PASS**, focused backend **35 PASS** with two dependency deprecations. Full backend/Ruff were not rerun; the independently reproduced upstream baseline above remains disclosed, not claimed fixed. Docker service is stopped and its Linux engine pipe is absent; PostgreSQL-native E2E was **NOT RUN**.
+
+Final review: responsive checks at 1440/1024/768/390px pass, mobile composition retained without horizontal overflow. `git diff --check` and the private-value secret scan pass; `.env` is ignored/untracked. No reference/mockup values were found in production Comparison components/helpers. CSS additions are Comparison-scoped. Backend, types, API contracts, ordering helpers, migrations and deployment/environment configuration remain identical to upstream. Official Paddle changes are limited to extracting the current read-only display helper; Settings form/routing is unchanged.
+
+Files in the complete feature diff (none removed):
+
+- Added: `design-qa.md`, `ComparisonDashboard.tsx`, `ComparisonFilters.tsx`, `comparison-examples.ts`, `comparison-identity.ts`, `pipeline-model-label.ts`, `comparison-dashboard.spec.ts`.
+- Adapted: `frontend/app/matrix/page.tsx`, `frontend/app/globals.css`, `ComparisonDecision.tsx`, `DynamicPipelineSettings.tsx`, `analytics-stage-b.spec.ts`.
+- Final polish touched only QA, Matrix metric copy, the two Comparison components and dashboard regression tests. No temporary captures/helpers, `.env`, build output or dependencies are included.
+
+Delivery scope: normal push of the feature branch and PR to `main` only. No main push, merge, deployment, production mutation or backup removal is authorized by this delivery. Review status: **SAFE TO REVIEW**.
