@@ -44,32 +44,38 @@ for(const width of [1440,390])test(`decision support and archived display invari
  await expect(card).toContainText("5 documents");
  await expect(page.getByTestId("comparison-simple-cards")).toContainText("Character Error");
  await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).not.toBeVisible();
- const text=await card.innerText();await page.getByRole("checkbox",{name:"Active pipelines only"}).uncheck();
+ const text=await card.innerText();await expect(page.getByRole("checkbox",{name:"Active pipelines only"})).toHaveCount(0);
  await expect(page.locator("main .loading-state")).toHaveCount(0);await expect(card).toHaveText(text,{useInnerText:true});
- await expect(page.getByRole("combobox",{name:"Pipeline A",exact:true}).locator("option")).toContainText(["เลือก Pipeline","Active A","Active B","Historical OCR (เก็บถาวร)"]);
+ await expect(page.getByRole("combobox",{name:"Pipeline A",exact:true}).locator("option")).toContainText(["เลือก Pipeline","Active A","Active B"]);
  await expect(page.locator('#console-navigation a[href^="/matrix"]')).toHaveCount(1);
  await expect(page.locator('#console-navigation a[href^="/analytics/categories"]')).toHaveCount(0);
- await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();
+ await page.locator("details>summary").filter({hasText:"เปรียบเทียบรายชุดทดสอบ"}).click();
  await expect(page.getByRole("link",{name:"synthetic.png",exact:true}).first()).toHaveAttribute("href","/test/saved");
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
- await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();await page.evaluate(()=>window.scrollTo(0,0));
+ await page.locator("details>summary").filter({hasText:"เปรียบเทียบรายชุดทดสอบ"}).click();await page.evaluate(()=>window.scrollTo(0,0));
  await page.screenshot({path:`../.runtime/comparison-review/local-overall-${width}.png`,fullPage:true});
 });
 
 test("shared business/pipeline/creation-date URL scope persists and local controls stay local",async({page})=>{
+ const historyRequests:URL[]=[];page.on("request",r=>{const u=new URL(r.url());if(u.pathname==="/api/history")historyRequests.push(u);});
  await fixtures(page);await page.goto("/history");
  await page.getByLabel("ประเภทเอกสาร (ธุรกิจ)").selectOption(typeId);
  await page.getByLabel("Pipeline",{exact:true}).selectOption("retired");
- await page.getByLabel("วันที่สร้างชุดทดสอบ · จากวันที่").fill("2026-09-01");
- await page.getByLabel("วันที่สร้างชุดทดสอบ · ถึงวันที่").fill("2026-10-01");
+ await page.getByLabel("จากวันที่").fill("2026-09-01");
+ await page.getByLabel("ถึงวันที่").fill("2026-10-01");
+ await expect.poll(()=>historyRequests.some(u=>u.searchParams.get("date_from")==="2026-09-01"&&u.searchParams.get("date_to")==="2026-10-01")).toBe(true);
  await page.getByLabel("ค้นหาในหน้านี้",{exact:true}).fill("synthetic");
  const scope=new URL(page.url()).search;
- for(const name of ["เปรียบเทียบ","ประวัติ"]){
-  await page.getByRole("navigation",{name:"เมนูหลัก"}).getByRole("link",{name,exact:true}).click();
-  await expect.poll(()=>new URL(page.url()).pathname).toBe(name==="เปรียบเทียบ"?"/matrix":"/history");
-  await expect.poll(()=>new URL(page.url()).search).toBe(scope);
-  await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveValue(typeId);
- }
+ expect(scope).toContain("date_from=2026-09-01");
+ await expect(page.locator("main")).not.toContainText("UTC");
+ await expect(page.getByRole("link",{name:"เปรียบเทียบผล",exact:true})).toHaveAttribute("href","/matrix");
+ await page.getByRole("link",{name:"เปรียบเทียบผล",exact:true}).click();
+ await expect.poll(()=>new URL(page.url()).pathname).toBe("/matrix");
+ await expect.poll(()=>new URL(page.url()).search).toBe("");
+ await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveCount(0);
+ await page.goto(`/history${scope}`);
+ await expect(page.getByLabel("ประเภทเอกสาร (ธุรกิจ)")).toHaveValue(typeId);
+ await expect(page.getByLabel("จากวันที่")).toHaveValue("2026-09-01");
  await expect(page.getByLabel("ค้นหาในหน้านี้",{exact:true})).toHaveValue("");
  await expect(page.locator("tbody")).toContainText("Historical OCR");
  await expect(page.locator("tbody")).toContainText("เก็บถาวร");
@@ -82,11 +88,11 @@ for(const width of [1440,390])test(`by-type heatmap and legacy redirect ${width}
  await fixtures(page);await page.setViewportSize({width,height:1050});
  await page.goto(`/analytics/categories?document_type_id=${typeId}&pipeline=a&date_from=2026-09-01&date_to=2026-10-01&include_archived=1`);
  await expect.poll(()=>new URL(page.url()).pathname).toBe("/matrix");
- const params=new URL(page.url()).searchParams;expect(params.get("view")).toBe("by-type");expect(params.get("include_archived")).toBe("1");expect(params.get("document_type_id")).toBe(typeId);expect(params.get("pipeline")).toBe("a");expect(params.get("date_from")).toBe("2026-09-01");expect(params.get("date_to")).toBe("2026-10-01");
+ await expect.poll(()=>new URL(page.url()).search).toBe("?view=by-type");
  await expect(page.getByRole("tab",{name:"ตามประเภทเอกสาร",exact:true})).toHaveAttribute("aria-selected","true");
  await expect(page.getByLabel("คำแนะนำตามประเภทเอกสาร")).toContainText("ทุกประเภท");
  await page.getByText("ดูตารางทุก Pipeline",{exact:true}).click();
- const heatmap=page.getByRole("table",{name:"เปรียบเทียบตามประเภทเอกสาร",exact:true});await expect(heatmap).toContainText("ทุกประเภท");await expect(heatmap).toContainText("ไม่ระบุประเภท");await expect(heatmap).toContainText("n=5");await expect(heatmap).not.toContainText("★");await expect(heatmap).toContainText("ยังไม่มีผู้ชนะชัดเจน");
+ const heatmap=page.getByRole("table",{name:"เปรียบเทียบตามประเภทเอกสาร",exact:true});await expect(heatmap).toContainText("ทุกประเภท");await expect(heatmap).not.toContainText("ไม่ระบุประเภท");await expect(heatmap).toContainText("n=5");await expect(heatmap).not.toContainText("★");await expect(heatmap).toContainText("ยังไม่มีผู้ชนะชัดเจน");
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
  await page.screenshot({path:`../.runtime/comparison-review/local-by-type-${width}.png`,fullPage:true});
 });
@@ -118,9 +124,9 @@ for(const route of ["/history","/matrix","/analytics/categories","/dataset"])tes
 
 test("failed OCR uses a readable state without developer log navigation",async({page})=>{
  await fixtures(page);
- await page.route("**/api/history*",route=>route.fulfill({json:[{...caseRecord,runs:[{...caseRecord.runs[0],status:"error"}]}]}));
+ await page.route("**/api/history*",route=>route.fulfill({json:[{...caseRecord,runs:[{...caseRecord.runs[0],pipeline_id:"a",pipeline_name:"Active A",status:"error"}]}]}));
  await page.goto("/matrix?include_archived=1");
- await page.getByText("ผลรายชุดทดสอบ",{exact:true}).click();
+ await page.locator("details>summary").filter({hasText:"เปรียบเทียบรายชุดทดสอบ"}).click();
  await expect(page.getByRole("table",{name:"เปรียบเทียบรายชุดทดสอบ"})).toContainText("ประมวลผลไม่สำเร็จ");
  await expect(page.locator('main a[href^="/logs"]')).toHaveCount(0);
  await expect(page.locator('main')).not.toContainText("request_id");
@@ -141,7 +147,7 @@ test("human logs expand technical details and deleted references have no broken 
 test("clear recommendation copy and Pareto absent on unmatched cohorts",async({page})=>{
  await fixtures(page);const data=decisionFixture();data.overall.recommendation="a";data.overall.featured_pair={...pair,winner:"a",verdict:"clear",ci95_pp:[-2,-.5]};data.overall.pairs=[data.overall.featured_pair];data.overall.scatter.pareto_valid=false;data.overall.scatter.cohort_mode="own";
  await page.route("**/api/analytics/comparison*",r=>r.fulfill({json:data}));await page.goto("/matrix");
- await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("แนะนำ");await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("Active A");await page.getByText("Advanced evaluation details",{exact:true}).click();await page.getByText("ความแม่นยำ × เวลา",{exact:true}).first().click();await expect(page.locator("main")).toContainText("ชุดเอกสารไม่ตรงกัน เทียบกันตรง ๆ ไม่ได้");await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);
+ await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("แนะนำ");await expect(page.getByLabel("คำแนะนำปัจจุบัน")).toContainText("Active A");await page.getByText("Advanced evaluation details",{exact:true}).click();await page.getByText("ความแม่นยำ × ความเร็ว",{exact:true}).first().click();await expect(page.locator("main")).toContainText("ชุดเอกสารไม่ตรงกัน เทียบกันตรง ๆ ไม่ได้");await expect(page.getByTestId("pareto-frontier")).toHaveCount(0);
  await page.getByRole("tab",{name:"ตามประเภทเอกสาร",exact:true}).click();await expect.poll(()=>new URL(page.url()).searchParams.get("view")).toBe("by-type");
 });
 
@@ -149,7 +155,8 @@ test("manual pair only changes inspection and never system decision",async({page
  await fixtures(page);await page.goto("/matrix");const hero=page.getByTestId("comparison-hero"),before=await hero.innerText();
  await page.getByRole("combobox",{name:"Pipeline A",exact:true}).selectOption("b");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("เลือก Pipeline คนละตัว");await expect(hero).toHaveText(before,{useInnerText:true});
  await page.getByRole("combobox",{name:"Pipeline B",exact:true}).selectOption("a");await expect(page.getByLabel("เปรียบเทียบสอง Pipeline โดยตรง")).toContainText("สูสี ยังสรุปไม่ได้");await expect(hero).toHaveText(before,{useInnerText:true});
- await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).not.toBeVisible();await page.getByText("ดูหลักฐานเชิงสถิติ",{exact:true}).click();await page.getByText("รายละเอียดการเทียบเป็นคู่",{exact:true}).first().click();await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"}).first()).toContainText("5 / 8");
+ await expect(page.getByRole("table",{name:"หลักฐานการเทียบคู่"})).toHaveCount(0);
+ await expect(page.getByText("รายละเอียดการเทียบเป็นคู่",{exact:true})).toHaveCount(0);
 });
 for(const width of [1440,390])test(`fresh Comparison has honest empty state ${width}`,async({page})=>{
  await fixtures(page);const data=decisionFixture();data.latest_results=0;data.pipelines=[];data.overall={...data.overall,recommendation:null,ranking:[],featured_pair:null,pairs:[],historical_pairs:[],documents:0,cells:[]};

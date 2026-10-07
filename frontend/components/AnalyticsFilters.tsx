@@ -15,7 +15,6 @@ export default function AnalyticsFilters({value, pipelines, onChange}: {
     return () => {active = false;};
   }, []);
   return <>
-    <span className="filter-note">ช่วงวันที่สร้างชุดทดสอบใช้วันตาม UTC</span>
     <label className="field">ประเภทเอกสาร (ธุรกิจ)
       <select aria-label="ประเภทเอกสาร (ธุรกิจ)" className="select" value={value.document_type_id || ""} onChange={e=>onChange("document_type_id",e.target.value)}>
         <option value="">ทุกประเภทเอกสาร</option>
@@ -28,10 +27,10 @@ export default function AnalyticsFilters({value, pipelines, onChange}: {
         <option value="">ทุก Pipeline</option>{pipelines.map(p=><option key={p.pipeline_id} value={p.pipeline_id}>{p.pipeline_name}{p.retired ? " · เก็บถาวร" : ""}</option>)}
       </select>
     </label>
-    <label className="field">วันที่สร้างชุดทดสอบ · จากวันที่
+    <label className="field">จากวันที่
       <input className="input" type="date" value={value.date_from||""} onChange={e=>onChange("date_from",e.target.value)} />
     </label>
-    <label className="field">วันที่สร้างชุดทดสอบ · ถึงวันที่
+    <label className="field">ถึงวันที่
       <input className="input" type="date" min={value.date_from} value={value.date_to||""} onChange={e=>onChange("date_to",e.target.value)} />
     </label>
   </>;

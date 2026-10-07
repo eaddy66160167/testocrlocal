@@ -2,16 +2,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
-import { getAnalyticsPipelines, getAnalyticsSummary, getHistory, getComparison, getMatrix, getPipelines } from "@/lib/api";
-import { useAnalyticsFilters, useComparisonDisplay } from "@/lib/analytics-scope";
-import ComparisonFilters from "@/components/ComparisonFilters";
+import { getAnalyticsSummary, getHistory, getComparison, getMatrix, getPipelines } from "@/lib/api";
+import { useComparisonDisplay } from "@/lib/analytics-scope";
+import {BestCerBadge, testMinimumCer, latestTestRun, isMinimumCer} from "@/components/BestCer";
 import {currentComparisonNames} from "@/lib/comparison-identity";
 import {ByType} from "@/components/ComparisonDecision";
 import { ComparisonHero, PipelineRanking, DocumentTypeWinners, PipelineSideBySide } from "@/components/ComparisonDashboard";
 import type {Comparison} from "@/types/comparison";
 import { pipelineLabel, userError } from "@/lib/i18n/th";
 import type {
-  AnalyticsPipeline,
   AnalyticsSummary,
   TestCase,
   PipelineConfig,
@@ -24,9 +23,7 @@ import {
 } from "@/components/ConsoleUI";
 export default function MatrixPage() {
   const [cases, setCases] = useState<TestCase[]>([]),
-    [pipelines, setPipelines] = useState<AnalyticsPipeline[]>([]),
     [summary, setSummary] = useState<AnalyticsSummary | null>(null);
-  const [filters, setFilters] = useAnalyticsFilters();
   const display = useComparisonDisplay();
   const [decision, setDecision] = useState<Comparison|null>(null);
   const [configs,setConfigs]=useState<PipelineConfig[]>([]);
@@ -34,16 +31,10 @@ export default function MatrixPage() {
   const [chosenPair,setChosenPair]=useState<[string,string]|null>(null);
   const [offset, setOffset] = useState(0),
     [hasNext, setHasNext] = useState(false),
-    [search, setSearch] = useState(""),
-    [onlyGT, setOnlyGT] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [revision, setRevision] = useState(0);
-  const invalid = !!(
-    filters.date_from &&
-    filters.date_to &&
-    filters.date_from > filters.date_to
-  );
+
   useEffect(()=>{
     const refresh=()=>setRevision(n=>n+1);
     window.addEventListener("focus",refresh);
@@ -54,23 +45,18 @@ export default function MatrixPage() {
     async function load() {
       setLoading(true);
       setError("");
-      if (invalid) {
-        setLoading(false);
-        return;
-      }
+
       await Promise.all([
-        getHistory({ ...filters, limit: 21, offset }),
-        getAnalyticsPipelines(),
-        getAnalyticsSummary(filters),
-        getComparison(filters, display.includeArchived),
+        getHistory({ limit: 21, offset }),
+        getAnalyticsSummary({}),
+        getComparison({}, false),
         getPipelines(),
-        getMatrix(filters),
+        getMatrix({}),
       ])
-        .then(([h, p, s, d, config, m]) => {
+        .then(([h, s, d, config, m]) => {
           if (active) {
             setCases(h.slice(0, 20));
             setHasNext(h.length > 20);
-            setPipelines(p);
             setSummary(s);
             // Current names/settings are authoritative. Historical identities retain their saved names.
             setDecision(currentComparisonNames(d,config));
@@ -89,16 +75,9 @@ export default function MatrixPage() {
     return () => {
       active = false;
     };
-  }, [filters, offset, revision, invalid, display.includeArchived]);
-  const visible = cases.filter(
-    (c) =>
-      (!onlyGT || c.ground_truth_raw !== null) &&
-      (!search ||
-        c.document.filename.toLowerCase().includes(search.toLowerCase())),
-  );
-  const selected = (decision?.pipelines ?? []).filter(
-    (p) => !filters.pipeline || p.pipeline_id === filters.pipeline,
-  );
+  }, [offset, revision]);
+  const visible = cases;
+  const selected = decision?.pipelines ?? [];
   const identities=decision?.pipelines??[];
   const defaults:[string,string]=[decision?.overall.recommendation??decision?.overall.ranking[0]?.pipeline_id??identities[0]?.pipeline_id??"",decision?.overall.ranking[1]?.pipeline_id??identities[1]?.pipeline_id??""];
   const pair:[string,string]=chosenPair&&chosenPair.every(id=>identities.some(p=>p.pipeline_id===id))?chosenPair:defaults;
@@ -108,13 +87,8 @@ export default function MatrixPage() {
   };
   return (
     <div className="page-stack comparison-page">
-      <div className="comparison-top"><div><h1>OCR Pipeline Comparison</h1><p>เปรียบเทียบ OCR Pipeline จากผลทดสอบบนเอกสารจริง</p></div><ComparisonFilters value={filters} onChange={v=>{setFilters(v);setOffset(0);}} pipelines={pipelines} archived={display.includeArchived} onArchived={v=>display.update("include_archived",v?"1":"")} search={search} onSearch={setSearch} onReset={()=>{setFilters({});setSearch("");setOnlyGT(false);setOffset(0);}}/></div>
+      <div className="comparison-top"><div><h1>OCR Pipeline Comparison</h1><p>เปรียบเทียบ OCR Pipeline จากผลทดสอบบนเอกสารจริง</p></div></div>
       <div className="comparison-section-head"><div role="tablist" aria-label="มุมมองการเปรียบเทียบ" className="comparison-tabs"><button role="tab" aria-selected={display.view === "overall"} onClick={()=>display.update("view","overall")}>สรุปผล</button><button role="tab" aria-selected={display.view === "by-type"} onClick={()=>display.update("view","by-type")}>ตามประเภทเอกสาร</button></div><button className="button secondary" disabled={loading} onClick={()=>setRevision(n=>n+1)}><RefreshCw size={16}/>รีเฟรช</button></div>
-      {invalid && (
-        <p className="error-banner" role="alert">
-          วันที่สิ้นสุดต้องไม่อยู่ก่อนวันเริ่มต้น
-        </p>
-      )}
       {error && (
         <div className="error-banner" role="alert">
           ไม่สามารถโหลดผลเปรียบเทียบได้: {error}{" "}
@@ -129,16 +103,15 @@ export default function MatrixPage() {
       {loading ? (
         <LoadingState label="กำลังโหลดผลเปรียบเทียบ…" />
       ) : (
-        !invalid &&
         !error && (
           <>
             {decision && (display.view === "overall" ? <>
               <ComparisonHero data={decision} rows={matrix} onCompare={()=>compare()}/>
               <div className="comparison-main-grid"><PipelineRanking data={decision} configs={configs} rows={matrix} onCompare={compare}/><DocumentTypeWinners data={decision} onAll={()=>display.update("view","by-type")}/></div>
-              <PipelineSideBySide key={`${offset}:${JSON.stringify(filters)}`} data={decision} cases={cases} pair={pair} setPair={setChosenPair} hasNext={hasNext} onNextPage={()=>setOffset(n=>n+20)}/>
+              <PipelineSideBySide key={offset} data={decision} cases={cases} pair={pair} setPair={setChosenPair} hasNext={hasNext} onNextPage={()=>setOffset(n=>n+20)}/>
             </> : <ByType data={decision}/>)}
-            <details className="panel panel-body"><summary className="cursor-pointer font-semibold">ผลรายชุดทดสอบ</summary>
-            <p className="filter-note">คำแนะนำใช้เอกสารชุดเดียวกันแบบเทียบเป็นคู่ · ตารางด้านล่างเป็นผลรายชุดทดสอบ · ค้นหาและ GT มีผลเฉพาะหน้านี้</p>
+            <details className="panel panel-body"><summary className="cursor-pointer font-semibold">เปรียบเทียบรายชุดทดสอบ</summary>
+            <p className="filter-note">สีเขียวแสดง CER ต่ำสุดในแถว ไม่ใช่ผู้ชนะโดยรวม</p>
             {cases.length ? (
               <section className="panel">
                 <div className="panel-header">
@@ -148,14 +121,6 @@ export default function MatrixPage() {
                       ผลล่าสุดต่อ Pipeline · ช่องที่ไม่มี Ground Truth แสดง —
                     </p>
                   </div>
-                  <label className="flex gap-2 text-sm items-center">
-                    <input
-                      type="checkbox"
-                      checked={onlyGT}
-                      onChange={(e) => setOnlyGT(e.target.checked)}
-                    />
-                    เฉพาะชุดที่มี Ground Truth ในหน้านี้
-                  </label>
                 </div>
                 {visible.length ? (
                   <div
@@ -180,7 +145,9 @@ export default function MatrixPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {visible.map((c) => (
+                        {visible.map((c) => {
+                          const best = testMinimumCer(c, selected.map(p => p.pipeline_id));
+                          return (
                           <tr key={c.id}>
                             <td>
                               <Link
@@ -197,11 +164,10 @@ export default function MatrixPage() {
                               </span>
                             </td>
                             {selected.map((p) => {
-                              const r = [...c.runs]
-                                .reverse()
-                                .find((r) => r.pipeline_id === p.pipeline_id);
+                              const r = latestTestRun(c, p.pipeline_id);
+                              const isBest = r?.status === "success" && isMinimumCer(r.metrics?.cer, best.minimum);
                               return (
-                                <td key={p.pipeline_id}>
+                                <td key={p.pipeline_id} className={isBest ? "comparison-cer-best" : r?.status === "error" ? "comparison-cer-error" : !r || r.metrics?.cer == null ? "comparison-cer-missing" : undefined}>
                                   {!r ? (
                                     <span className="muted">ยังไม่ทดสอบ</span>
                                   ) : r.status === "error" ? (
@@ -210,6 +176,7 @@ export default function MatrixPage() {
                                     <>
                                       <strong>
                                         CER ของชุดทดสอบนี้ {percent(r.metrics?.cer)}
+                                        {isBest && <BestCerBadge tied={best.tied}/>}
                                       </strong>
                                       <span className="row-meta">
                                         WER {percent(r.metrics?.wer)} · Exact{" "}
@@ -229,7 +196,7 @@ export default function MatrixPage() {
                               );
                             })}
                           </tr>
-                        ))}
+                        );})}
                       </tbody>
                     </table>
                   </div>

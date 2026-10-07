@@ -1,4 +1,30 @@
 @import "tailwindcss";
+.comparison-page .comparison-cer-best { background:#ecfdf3; box-shadow:inset 3px 0 #16a34a; }
+.comparison-best-badge { display:block; width:fit-content; padding:3px 7px; border:1px solid #bbf7d0; border-radius:5px; font-size:11px; color:#166534; background:#dcfce7; margin-top:6px; }
+.comparison-page .comparison-cer-error { background:#fff1f2; }
+.comparison-page .comparison-cer-missing { color:#64748b; }
+.comparison-speed { min-width:0; }
+.comparison-speed h2 { display:flex; align-items:center; gap:9px; font-size:19px; font-weight:700; }
+.comparison-speed h2 svg { color:#0667e8; }
+.comparison-speed-grid { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:24px; margin-top:18px; }
+.comparison-speed-plot { min-width:0; }
+.comparison-speed-plot>svg { display:block; width:100%; }
+.comparison-speed [data-testid="chart-marker"] { cursor:pointer; }
+.comparison-speed [data-testid="chart-marker"]:focus { outline:none; }
+.comparison-speed [data-testid="chart-marker"]:focus circle { stroke-width:5; }
+.comparison-speed h3 { font-weight:600; margin:10px 0; }
+.comparison-speed-legend { display:grid; gap:8px; }
+.comparison-speed-legend li { display:flex; align-items:center; gap:12px; border:1px solid #e2e8f0; border-radius:9px; padding:12px; min-width:0; }
+.comparison-speed-legend strong,.comparison-speed-legend span,.comparison-speed-legend small { display:block; overflow-wrap:anywhere; }
+.comparison-speed-legend strong { font-size:13px; }
+.comparison-speed-legend small { color:#64748b; font-size:11px; }
+.comparison-speed-number { width:30px; height:30px; flex-shrink:0; border-radius:50%; color:white; display:flex!important; align-items:center; justify-content:center; font-weight:700; }
+.comparison-speed-direction { display:flex; align-items:center; gap:6px; font-size:13px; color:#166534; margin-top:6px; }
+.comparison-speed-axis { font-size:13px; text-align:center; color:#334155; margin:4px 0 16px; }
+.comparison-speed-tooltip { font-size:12px; color:#475569; min-height:42px; margin-top:8px; }
+.comparison-speed-pareto { display:flex; align-items:center; gap:8px; font-size:12px; margin:12px 0; }
+.comparison-speed-pareto span { width:35px; border-top:3px dashed #0667e8; }
+@media(max-width:1024px) { .comparison-speed-grid { grid-template-columns:1fr; gap:12px; } }
 /* Comparison dashboard: scoped to preserve the rest of the console. */
 .comparison-page { color:#142443; gap:18px; }
 .comparison-top { display:grid; grid-template-columns:1fr auto; align-items:end; gap:18px; }
