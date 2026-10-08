@@ -79,6 +79,7 @@ export async function localRequest<T>(path:string, init:RequestInit|undefined, b
       if(id==="bulk-delete")return deleteTestCases(body.test_case_ids);
       if(!id&&method==="POST") {const input=body as TestCaseInput,doc=await documentPage(input.document_id,input.page_number??1,base);const time=stamp();const c:LocalCase={id:crypto.randomUUID(),document_id:doc.id,page_number:doc.page_number,workflow:input.workflow??"legacy",evaluation_mode:"per_field",global_fields:[],roi:input.roi,roi_source:input.roi_source??"none",ground_truth_raw:input.ground_truth_raw,ground_truth_normalized:input.ground_truth_raw?.normalize("NFC").replace(/\s+/g," ").trim()??null,status:"draft",created_at:time,updated_at:time,categories:(await db.categories.toArray()).filter(c=>input.category_codes.includes(c.code))};await db.testCases.put(c);return readCase(c.id,base);}
       if(method==="DELETE"){await deleteTestCases([id]);return undefined;}
+      if(action==="errors"&&child==="recompute") {const c=await calculation(id,"recompute",{},base,gateway);return {test_case_id:id,recomputed_runs:c.runs.length};}
       if(action==="run") {
         const c=await readCase(id,base),configs=await configuration<PipelineConfig[]>("/pipelines",base),entry=await db.config.get(`${base}/pipelines`);
         if(c.workflow==="global"&&(!c.layout_confirmed_at||!c.global_fields?.length))throw new Error("กรุณายืนยัน Layout ก่อนรัน OCR");
@@ -107,25 +108,25 @@ export async function localRequest<T>(path:string, init:RequestInit|undefined, b
       return readCase(id,base);
     }
     if(root==="history") {
-      const cases=await filteredCases(q), items=cases.filter(c=>c.runs.length);
-      return items.slice(Number(q.get("offset")??0),Number(q.get("offset")??0)+Math.min(200,Number(q.get("limit")??50)));
+      return filteredCases(q,{history:true,offset:Math.max(0,Number(q.get("offset")??0)),limit:Math.min(200,Math.max(1,Number(q.get("limit")??50)))});
     }
     if(root==="matrix"||root==="analytics") {
       const cases=await filteredCases(q);const configs=await configuration<PipelineConfig[]>("/pipelines",base);
       const allowed=["category","pipeline","document","document_type_id","date_from","date_to"];
-      return gateway("/ocr/analyze",{method:"POST",body:JSON.stringify({operation:root==="matrix"?"matrix":id,cases,configs,document_types:await db.documentTypes.toArray(),filters:Object.fromEntries([...q].filter(([k])=>allowed.includes(k))),include_archived:q.get("include_archived")==="1"})});
+      return gateway("/ocr/analyze",{method:"POST",body:JSON.stringify({operation:root==="matrix"?"matrix":id,cases,configs,document_types:await db.documentTypes.toArray(),filters:Object.fromEntries([...q].filter(([k])=>allowed.includes(k))),include_archived:q.get("include_archived")==="1",error_filters:Object.fromEntries([...q].filter(([k])=>["pipeline","category","error_type","error_level","text_kind","test_case_id","document"].includes(k))),limit:Number(q.get("limit")??50),offset:Number(q.get("offset")??0)})});
     }
     if(root==="dataset")return datasetRequest(parts,method,body,q,base);
     throw new Error(`Local operation is not supported: ${url.pathname}`);
   })(); return result as T;
 }
 async function sourceForm(id:string,page:number,options:unknown) {const form=new FormData();form.set("file",await documentBlob(id),"source");form.set("page_number",String(page));form.set("options",JSON.stringify(options));return form;}
-async function filteredCases(q:URLSearchParams) {
+async function filteredCases(q:URLSearchParams, options:{history?:boolean;offset?:number;limit?:number;metadataOnly?:boolean}={}) {
+  let matched=0;
   const db=localDB(), cases=await db.testCases.orderBy("created_at").reverse().toArray(), output:TestCase[]=[];
-  for(const c of cases){if(q.get("document")&&c.document_id!==q.get("document"))continue;if(q.get("category")&&!c.categories.some(t=>t.code===q.get("category")))continue;if(q.get("date_from")&&c.created_at.slice(0,10)<q.get("date_from")!)continue;if(q.get("date_to")&&c.created_at.slice(0,10)>q.get("date_to")!)continue;const doc=await db.documents.get(c.document_id);if(!doc||q.get("document_type_id")&&doc.document_type_id!==q.get("document_type_id"))continue;const runs=await db.results.where("test_case_id").equals(c.id).sortBy("created_at");if(q.get("pipeline")&&!runs.some(r=>r.pipeline_id===q.get("pipeline")))continue;output.push({...c,document:{...doc,image_url:`/local-assets/${doc.id}/${c.page_number??1}`},runs});}return output;
+  for(const c of cases){if(q.get("document")&&c.document_id!==q.get("document"))continue;if(q.get("category")&&!c.categories.some(t=>t.code===q.get("category")))continue;if(q.get("date_from")&&c.created_at.slice(0,10)<q.get("date_from")!)continue;if(q.get("date_to")&&c.created_at.slice(0,10)>q.get("date_to")!)continue;const doc=await db.documents.get(c.document_id);if(!doc||q.get("document_type_id")&&doc.document_type_id!==q.get("document_type_id"))continue;if(options.history&&!await db.results.where("test_case_id").equals(c.id).count())continue;if(q.get("pipeline")&&!await db.results.where("[test_case_id+pipeline_id]").equals([c.id,q.get("pipeline")!]).count())continue;if(matched++<(options.offset??0))continue;const runs=options.metadataOnly?[]:await db.results.where("test_case_id").equals(c.id).sortBy("created_at");output.push({...c,document:{...doc,image_url:`/local-assets/${doc.id}/${c.page_number??1}`},runs});if(options.limit&&output.length>=options.limit)break;}return output;
 }
 async function datasetRequest(parts:string[],method:string,body:Record<string,unknown>,q:URLSearchParams,base:string) {
-  const db=localDB(), cases=await filteredCases(q), excluded=new Set((await db.datasets.filter(d=>d.excluded).toArray()).map(d=>d.id));
+  const db=localDB(), cases=await filteredCases(q,{metadataOnly:true}), excluded=new Set((await db.datasets.filter(d=>d.excluded).toArray()).map(d=>d.id));
   type Sample = {id:string;test_case_id:string;global_field_id:string|null;field_index:number|null;document_id:string;filename:string;page_number:number|null;roi:ROI|null;ground_truth_raw:string;updated_at:string;source_sha256:string|null;categories:string[];document_type_id?:string|null;document_type_name?:string|null;source_available:boolean};
   const samples=cases.flatMap<Sample>(c=>c.workflow==="global"?(c.global_fields??[]).filter(f=>f.confirmed_at&&f.ground_truth_raw?.trim()).map(f=>({id:f.id,test_case_id:c.id,global_field_id:f.id,field_index:f.field_index,document_id:c.document_id,filename:c.document.filename,page_number:c.page_number,roi:f.roi,ground_truth_raw:f.ground_truth_raw!,updated_at:c.updated_at,source_sha256:c.document.sha256??null,categories:c.categories.map(t=>t.code),document_type_id:c.document.document_type_id,document_type_name:c.document.document_type_name,source_available:true})):c.status==="confirmed"&&c.ground_truth_raw?.trim()?[{id:c.id,test_case_id:c.id,global_field_id:null,field_index:null,document_id:c.document_id,filename:c.document.filename,page_number:c.page_number,roi:c.roi,ground_truth_raw:c.ground_truth_raw,updated_at:c.updated_at,source_sha256:c.document.sha256??null,categories:c.categories.map(t=>t.code),document_type_id:c.document.document_type_id,document_type_name:c.document.document_type_name,source_available:true}]:[]).filter(s=>!excluded.has(s.id));
   if(method==="DELETE"||parts[2]==="bulk-exclude") {

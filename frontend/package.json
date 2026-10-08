@@ -8,7 +8,8 @@
     "start": "next start --hostname 0.0.0.0",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:local": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "dexie": "^4.4.6",
