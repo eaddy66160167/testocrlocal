@@ -4,17 +4,31 @@ import type { Category, CategoryAnalytics, Document, MatrixRow, PipelineConfig, 
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export function assetUrl(path: string): string {
-  return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+  return /^(https?:|blob:)/.test(path) || path.startsWith("/local-") ? path : `${API_BASE_URL}${path}`;
 }
 
 export const deletePipeline = (id: string) => request<void>(`/pipelines/${encodeURIComponent(id)}`, {method:"DELETE"});
 
+let adminToken = "";
+export function setAdministratorToken(token: string) { adminToken = token; }
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (path.startsWith("/pipelines") && (!init?.method || init.method === "GET")) {
+    const { configuration } = await import("./pipeline-cache"); return configuration<T>(path, API_BASE_URL);
+  }
+  if (path.startsWith("/pipelines") || path.startsWith("/integrations/") || path === "/upload-config") {
+    const value = await networkRequest<T>(path, init);
+    if (path.startsWith("/pipelines") && init?.method) { const { invalidateConfiguration } = await import("./pipeline-cache"); await invalidateConfiguration(); }
+    return value;
+  }
+  const { localRequest } = await import("./local-db/api");
+  return localRequest<T>(path, init, API_BASE_URL, networkRequest);
+}
+async function networkRequest<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...init,
-      headers: init?.body instanceof FormData ? init.headers : { "Content-Type": "application/json", ...init?.headers },
+      headers: { ...(init?.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...(adminToken && path.startsWith("/pipelines") && init?.method ? {Authorization:`Bearer ${adminToken}`} : {}), ...init?.headers },
       cache: "no-store",
     });
   } catch {
@@ -58,20 +72,13 @@ export type AppLog = { id: string; created_at: string; level: string; event_type
 export const getLogs = (params: URLSearchParams) => request<{ enabled?:boolean; total: number; items: AppLog[] }>(`/logs?${params}`);
 export type PageProgress = { event: string; page?: number; pages?: number[]; status?: string; test_case_id?: string; message?: string };
 export async function runPages(id: string, pages: number[], pipelines: string[], category_codes: string[], onEvent: (event: PageProgress) => void) {
-  const response = await fetch(`${API_BASE_URL}/api/documents/${id}/run-pages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pages, pipelines, category_codes }) });
-  if (!response.ok || !response.body) throw new Error("เริ่มประมวลผลไม่ได้ กรุณาตรวจหมายเลขหน้าและการเชื่อมต่อ");
-  const reader = response.body.getReader(), decoder = new TextDecoder();
-  let buffer = "", finished = false;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
-      const lines = buffer.split("\n"); buffer = lines.pop() ?? "";
-      for (const line of lines) if (line.trim()) { const event = JSON.parse(line) as PageProgress; if (event.event === "batch_finished") finished = true; onEvent(event); }
-      if (done) break;
-    }
-    if (!finished) throw new Error("การเชื่อมต่อขาด กรุณาตรวจประวัติและบันทึกการทำงานก่อนลองใหม่");
-  } finally { reader.releaseLock(); }
+  onEvent({event:"batch_started",pages});
+  for (const page of pages) {
+    try { const c=await createTestCase({document_id:id,page_number:page,workflow:"legacy",roi:null,ground_truth_raw:null,category_codes}); onEvent({event:"page_started",page,test_case_id:c.id});
+      await runPipelines(c.id,pipelines); onEvent({event:"page_finished",page,test_case_id:c.id,status:"success"});
+    } catch(e) { onEvent({event:"page_finished",page,status:"error",message:e instanceof Error?e.message:"?????????????????"}); }
+  }
+  onEvent({event:"batch_finished",pages});
 }
 export const updateTestCase = (id: string, input: Partial<TestCaseInput>) => request<TestCase>(`/test-cases/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const saveGroundTruth = (id: string, ground_truth_raw: string, confirmed = false) => request<TestCase>(`/test-cases/${id}/ground-truth`, { method: "PUT", body: JSON.stringify({ ground_truth_raw, confirmed }) });
@@ -89,12 +96,10 @@ export const getErrorAnalysis = (params: URLSearchParams) => request<{ total: nu
 export const recomputeErrors = (id: string) => request<{ recomputed_runs: number }>(`/test-cases/${id}/errors/recompute`, { method: "POST" });
 export type DatasetSample = { document_type_id?: string | null; document_type_name?: string | null; id: string; test_case_id?: string; global_field_id?: string | null; field_index?: number | null; document_id: string; filename: string; page_number: number | null; roi: import("@/types").ROI; ground_truth_raw: string; updated_at: string; source_sha256: string | null; categories: string[]; source_available?: boolean };
 export const getDatasetSamples = (params: URLSearchParams) => request<{ total: number; items: DatasetSample[] }>(`/dataset/samples?${params}`);
-export async function exportDataset(test_case_ids: string[]) {
-  const response = await fetch(`${API_BASE_URL}/api/dataset/export`, { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ test_case_ids: test_case_ids.filter(id=>!id.startsWith("field:")).map(id=>id.replace(/^case:/,"")), global_field_ids: test_case_ids.filter(id=>id.startsWith("field:")).map(id=>id.slice(6)) }) });
-  if (!response.ok) { const error = await response.json().catch(() => null); throw new Error(typeof error?.detail === "string" ? error.detail : "ส่งออก Dataset ไม่สำเร็จ กรุณาลองใหม่"); }
-  return response.blob();
+export async function exportDataset(ids: string[]) {
+  return request<Blob>("/dataset/export", {method:"POST",body:JSON.stringify({test_case_ids:ids.filter(id=>!id.startsWith("field:")).map(id=>id.replace(/^case:/,"")),global_field_ids:ids.filter(id=>id.startsWith("field:")).map(id=>id.slice(6))})});
 }
-export const cropUrl = (id: string, roi: import("@/types").ROI, page_number: number | null = null) => assetUrl(`/api/documents/${id}/crop?${new URLSearchParams(Object.entries({ ...roi, ...(page_number ? { page_number } : {}) }).map(([k, v]) => [k, String(v)]))}`);
+export const cropUrl = (id: string, roi: import("@/types").ROI, page_number: number | null = null) => assetUrl(`/local-crop/${id}/${page_number ?? 1}?${new URLSearchParams(Object.entries({ ...roi, ...(page_number ? { page_number } : {}) }).map(([k, v]) => [k, String(v)]))}`);
 export async function loadSample(): Promise<File> {
   const response = await fetch("/sample-document.png");
   if (!response.ok) throw new Error(t("The sample document could not be loaded."));

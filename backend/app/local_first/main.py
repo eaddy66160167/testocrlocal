@@ -1,4 +1,5 @@
-﻿import asyncio
+from app.local_first.calculations import CalculationInput, AnalysisInput, calculate, analyze
+import asyncio
 import hmac
 from collections import deque
 from contextlib import asynccontextmanager
@@ -162,4 +163,37 @@ def create_app(settings=None):
         finally: semaphore.release()
     @app.get("/api/admin/metrics", dependencies=[Depends(administrator)])
     def counters(): return {**database.metrics,**cache.metrics,**metrics,"byte_estimate_scope":"serialized config payload only; excludes protocol/TLS/query overhead; not Neon billing","warning_thresholds_mb":settings.transfer_warning_mb}
+    @app.post("/api/ocr/calculate")
+    def calculation(data: CalculationInput): return calculate(data)
+    @app.post("/api/ocr/analyze")
+    def analysis(data: AnalysisInput): return analyze(data)
+    @app.post("/api/ocr/crop")
+    async def crop(file: UploadFile = File(...), options: str = Form(..., max_length=100000), page_number: int = Form(default=1, ge=1)):
+        from app.schemas.contracts import ROI
+        import json
+        raw = json.loads(options)
+        roi = ROI.model_validate(raw["roi"]).model_dump() if raw.get("roi") else None
+        png, _, _, _ = await image(file, page_number)
+        images = ImageService(settings)
+        with images.open(png) as original: cropped = images.canonical_crop(original, roi)
+        return Response(cropped.png, media_type="image/png")
+    @app.post("/api/ocr/auto-rois")
+    async def auto_roi(file: UploadFile = File(...), options: str = Form(..., max_length=100000), page_number: int = Form(default=1, ge=1)):
+        from types import SimpleNamespace
+        from app.schemas.contracts import AutoROIRequest
+        from app.services.auto_roi_service import AutoROIService
+        data = AutoROIRequest.model_validate_json(options)
+        png, width, height, _ = await image(file, page_number)
+        service = AutoROIService.__new__(AutoROIService)
+        service.repository = SimpleNamespace(document=lambda id: None)
+        service.gateway = ModelGatewayClient(settings)
+        service.cases = SimpleNamespace(page_image=lambda *a: (png,width,height))
+        return await service.suggest("transient", data)
+    @app.post("/api/pipelines/{pipeline_id}/test-connection", dependencies=[Depends(administrator)])
+    async def connection(pipeline_id: str):
+        snapshot = await run_in_threadpool(cache.get)
+        if pipeline_id not in {p.pipeline_id for p in snapshot.configs}: raise AppError("Pipeline not found",404)
+        if not settings.api_key(pipeline_id): return {"status":"missing_key","message":"Configure LOCAL_MODEL_GATEWAY_API_KEY first"}
+        status = await ModelGatewayClient(settings).status()
+        return {"status":"gateway_connected" if status["gateway"] == "connected" else "unavailable","message":"Run OCR to verify the selected model"}
     return app
