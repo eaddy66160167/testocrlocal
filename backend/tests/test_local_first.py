@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, select
 from app.local_first.main import create_app
@@ -6,7 +6,7 @@ from app.local_first.settings import LocalSettings
 from app.local_first.database import metadata, revision_table
 @pytest.fixture
 def local(tmp_path, gateway):
-    settings = LocalSettings(database_url=f"sqlite:///{(tmp_path/'shared.db').as_posix()}", admin_token="isolated-test-admin", model_gateway_base_url="https://gateway.example", model_gateway_api_key="test-gateway-secret", requests_per_minute=1000)
+    settings = LocalSettings(database_url=f"sqlite:///{(tmp_path/'shared.db').as_posix()}", admin_token="isolated-test-admin", pipeline_mutations_public=False, model_gateway_base_url="https://gateway.example", model_gateway_api_key="test-gateway-secret", requests_per_minute=1000)
     app = create_app(settings); metadata.create_all(app.state.database.engine)
     with app.state.database.engine.begin() as c: c.execute(revision_table.insert().values(id=1, revision=1))
     with TestClient(app) as client: yield client, app
@@ -59,3 +59,20 @@ def test_global_layout_stateless(local, png):
     assert response.status_code == 200, response.text
     assert response.json()["runs"][0]["fields"][0]["global_field_id"] == options["fields"][0]["id"]
     assert app.state.database.metrics["queries"] == before
+
+
+def test_public_pipeline_management_as_requested(tmp_path, gateway):
+    settings = LocalSettings(database_url=f"sqlite:///{(tmp_path/'public.db').as_posix()}", model_gateway_base_url="https://gateway.example")
+    app = create_app(settings)
+    metadata.create_all(app.state.database.engine)
+    with app.state.database.engine.begin() as c:
+        c.execute(revision_table.insert().values(id=1,revision=1))
+    with TestClient(app) as client:
+        created=client.post("/api/pipelines",json={"name":"public","source":"custom"})
+        assert created.status_code == 201, created.text
+        pid=created.json()["pipeline_id"]
+        edited=client.put(f"/api/pipelines/{pid}/definition",json={"name":"renamed","source":"custom","enabled":False})
+        assert edited.status_code == 200 and edited.json()["enabled"] is False
+        assert client.delete(f"/api/pipelines/{pid}").status_code == 204
+        assert client.get("/api/config/version").json()["revision"] == 4
+        assert client.get("/api/admin/metrics").status_code == 503

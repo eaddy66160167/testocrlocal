@@ -9,8 +9,6 @@ export function assetUrl(path: string): string {
 
 export const deletePipeline = (id: string) => request<void>(`/pipelines/${encodeURIComponent(id)}`, {method:"DELETE"});
 
-let adminToken = "";
-export function setAdministratorToken(token: string) { adminToken = token; }
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (path.startsWith("/pipelines") && (!init?.method || init.method === "GET")) {
     const { configuration } = await import("./pipeline-cache"); return configuration<T>(path, API_BASE_URL);
@@ -28,7 +26,7 @@ async function networkRequest<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...init,
-      headers: { ...(init?.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...(adminToken && path.startsWith("/pipelines") && init?.method ? {Authorization:`Bearer ${adminToken}`} : {}), ...init?.headers },
+      headers: { ...(init?.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...init?.headers },
       cache: "no-store",
     });
   } catch {

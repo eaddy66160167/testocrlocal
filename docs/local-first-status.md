@@ -30,3 +30,6 @@ Provided Railway project: 823dd798-f058-4e2b-b368-14e81c35a9cc.
 Provided Vercel project: eaddy/testocrlocal; historical deployment ID J1f6oBsh3eCH8u4csTTYypUPZ56d. A URL is not proof of a successful deployment of this branch.
 
 Production reference remains untouched. Do not merge this branch as a verified release.
+
+## User preference update — 2026-10-08
+The user explicitly requested public Pipeline Management, matching the original application: anyone may create, edit or delete shared pipelines/models without a login. LOCAL_PIPELINE_MUTATIONS_PUBLIC defaults to true. This overrides the earlier prompt's pipeline administrator-authentication acceptance criterion. Gateway credentials remain backend-only. Optional restricted mode remains available with LOCAL_PIPELINE_MUTATIONS_PUBLIC=false and LOCAL_ADMIN_TOKEN; operational metrics remain protected separately. No administrator login field is added to the normal UI.

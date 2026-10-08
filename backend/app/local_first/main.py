@@ -91,6 +91,9 @@ def create_app(settings=None):
         token = settings.admin_token.get_secret_value()
         if not token: raise AppError("Pipeline administration is disabled until configured", 503)
         if not authorization or not hmac.compare_digest(authorization, "Bearer " + token): raise AppError("Administrator authorization required", 401)
+    def pipeline_editor(authorization: str | None = Header(default=None)):
+        if not settings.pipeline_mutations_public:
+            administrator(authorization)
     def conditional(request, value, snapshot):
         tag = f'"config-{snapshot.revision}"'
         headers = {"ETag":tag,"X-Config-Revision":str(snapshot.revision),"Cache-Control":"private, max-age=0, must-revalidate"}
@@ -117,15 +120,15 @@ def create_app(settings=None):
     @app.get("/api/pipelines")
     def pipelines(request: Request):
         snapshot = cache.get(); return conditional(request, list(snapshot.public_configs), snapshot)
-    @app.post("/api/pipelines/models", dependencies=[Depends(administrator)], status_code=201)
+    @app.post("/api/pipelines/models", dependencies=[Depends(pipeline_editor)], status_code=201)
     def create_model(data: OCRModelInput): return mutate(lambda s: model_json(DynamicPipelineService(s).save_model(data)))
-    @app.put("/api/pipelines/models/{model_id}", dependencies=[Depends(administrator)])
+    @app.put("/api/pipelines/models/{model_id}", dependencies=[Depends(pipeline_editor)])
     def update_model(model_id: str, data: OCRModelInput): return mutate(lambda s: model_json(DynamicPipelineService(s).save_model(data, model_id)))
-    @app.post("/api/pipelines", dependencies=[Depends(administrator)], status_code=201)
+    @app.post("/api/pipelines", dependencies=[Depends(pipeline_editor)], status_code=201)
     def create_pipeline(data: DynamicPipelineInput): return mutate(lambda s: config_json(DynamicPipelineService(s).save_pipeline(data), settings))
-    @app.put("/api/pipelines/{pipeline_id}/definition", dependencies=[Depends(administrator)])
+    @app.put("/api/pipelines/{pipeline_id}/definition", dependencies=[Depends(pipeline_editor)])
     def update_pipeline(pipeline_id: str, data: DynamicPipelineInput): return mutate(lambda s: config_json(DynamicPipelineService(s).save_pipeline(data, pipeline_id), settings))
-    @app.delete("/api/pipelines/{pipeline_id}", dependencies=[Depends(administrator)], status_code=204)
+    @app.delete("/api/pipelines/{pipeline_id}", dependencies=[Depends(pipeline_editor)], status_code=204)
     def delete_pipeline(pipeline_id: str):
         def remove(session):
             config = session.scalar(select(PipelineConfig).where(PipelineConfig.pipeline_id == pipeline_id))
@@ -189,7 +192,7 @@ def create_app(settings=None):
         service.gateway = ModelGatewayClient(settings)
         service.cases = SimpleNamespace(page_image=lambda *a: (png,width,height))
         return await service.suggest("transient", data)
-    @app.post("/api/pipelines/{pipeline_id}/test-connection", dependencies=[Depends(administrator)])
+    @app.post("/api/pipelines/{pipeline_id}/test-connection", dependencies=[Depends(pipeline_editor)])
     async def connection(pipeline_id: str):
         snapshot = await run_in_threadpool(cache.get)
         if pipeline_id not in {p.pipeline_id for p in snapshot.configs}: raise AppError("Pipeline not found",404)

@@ -1,4 +1,4 @@
-﻿from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import SettingsConfigDict
 from app.core.config import Settings
 
@@ -7,6 +7,7 @@ class LocalSettings(Settings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore", env_prefix="LOCAL_")
     database_url: SecretStr = SecretStr("")
     admin_token: SecretStr = SecretStr("")
+    pipeline_mutations_public: bool = True
     cors_origins: str = "https://testocrlocal.vercel.app,http://localhost:3000,http://127.0.0.1:3000"
     cache_ttl_seconds: float = Field(default=60, gt=0, le=3600)
     pool_size: int = Field(default=2, ge=1, le=10)
