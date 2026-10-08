@@ -1,4 +1,7 @@
-﻿from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
+from contextvars import ContextVar
+from time import perf_counter
+operation_queries = ContextVar("operation_queries", default=None)
+from sqlalchemy import BigInteger, Column, Integer, MetaData, Table, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from app.db.models import OCRModel, PipelineConfig
 
@@ -27,10 +30,16 @@ class SharedDatabase:
         self.engine = create_engine(url, **kwargs)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False)
         self.mutations = sessionmaker(self.engine, class_=MutationSession, expire_on_commit=False)
-        self.metrics = {"queries": 0, "connections_opened": 0}
+        self.metrics = {"queries": 0, "connections_opened": 0, "sql_duration_ms": 0.0}
         event.listen(self.engine, "before_cursor_execute", self._query)
         event.listen(self.engine, "connect", self._connect)
-    def _query(self, *args):
+        event.listen(self.engine, "after_cursor_execute", self._completed)
+    def _query(self, conn, cursor, statement, parameters, context, executemany):
         self.metrics["queries"] += 1
+        context._local_started = perf_counter()
+        counter=operation_queries.get()
+        if counter is not None: counter["queries"] += 1
+    def _completed(self, conn, cursor, statement, parameters, context, executemany):
+        self.metrics["sql_duration_ms"] += (perf_counter()-context._local_started)*1000
     def _connect(self, *args):
         self.metrics["connections_opened"] += 1

@@ -26,7 +26,7 @@ async function networkRequest<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${API_BASE_URL}/api${path}`, {
       ...init,
-      headers: { ...(init?.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...init?.headers },
+      headers: { ...(!init?.body || init.body instanceof FormData ? {} : {"Content-Type":"application/json"}), ...init?.headers },
       cache: "no-store",
     });
   } catch {

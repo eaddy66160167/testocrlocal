@@ -16,14 +16,25 @@ from app.core.errors import AppError
 from app.db.models import PipelineConfig
 from app.integrations.model_gateway import ModelGatewayClient
 from app.local_first.cache import ConfigCache
-from app.local_first.database import SharedDatabase, revision_table
+from app.local_first.database import SharedDatabase, revision_table, operation_queries
 from app.local_first.execution import ExecutionInput, execute
 from app.local_first.settings import LocalSettings
+from pydantic import BaseModel
+
+class PipelineToggle(BaseModel):
+    enabled: bool
+    model_config = {"extra":"forbid"}
+
 from app.schemas.dynamic_pipelines import DynamicPipelineInput, OCRModelInput
 from app.services.dynamic_pipeline_service import DynamicPipelineService, model_json
 from app.services.image_service import ImageService
 from app.services.pdf_service import PdfService
 from app.services.serializers import config_json
+
+class CorsGateway(CORSMiddleware):
+    """Wrap even ServerErrorMiddleware so rate limits and failures carry CORS."""
+    def __getattr__(self, name):
+        return getattr(self.app, name)
 
 class BodyLimit:
     def __init__(self, app, limit): self.app, self.limit = app, limit
@@ -51,6 +62,8 @@ def create_app(settings=None):
     database = SharedDatabase(settings)
     cache = ConfigCache(database, settings)
     metrics = {"ocr_runs":0, "ocr_db_queries":0, "api_response_bytes":0, "rate_rejections":0}
+    endpoint_counts = {}
+    started = monotonic()
     arrivals = deque()
     semaphore = asyncio.Semaphore(settings.ocr_concurrency)
     @asynccontextmanager
@@ -61,19 +74,25 @@ def create_app(settings=None):
     app = FastAPI(title="OCR local-first testing gateway", lifespan=lifespan)
     app.state.database, app.state.cache = database, cache
     app.add_middleware(BodyLimit, limit=(settings.max_upload_mb + 2) * 1024 * 1024)
-    app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
-        allow_methods=["GET","POST","PUT","DELETE","OPTIONS"], allow_headers=["Content-Type","Authorization","If-None-Match"],
-        expose_headers=["ETag","X-Config-Revision","X-Image-Width","X-Image-Height","X-Page-Count"])
     @app.middleware("http")
     async def limits(request, call_next):
+        key=f"{request.method} {request.url.path}"
+        # Bound label cardinality; shared IDs are never included in telemetry.
+        if request.url.path.startswith("/api/pipelines/") and request.url.path != "/api/pipelines/models": key=f"{request.method} /api/pipelines/:id"
+        elif key not in endpoint_counts and len(endpoint_counts)>=50: key="other"
+        endpoint_counts[key]=endpoint_counts.get(key,0)+1
+        counter={"queries":0}
+        token=operation_queries.set(counter)
         if request.url.path != "/api/health" and request.method != "OPTIONS":
             now = monotonic()
             while arrivals and arrivals[0] < now - 60: arrivals.popleft()
             if len(arrivals) >= settings.requests_per_minute:
                 metrics["rate_rejections"] += 1
+                operation_queries.reset(token)
                 return JSONResponse({"detail":"Gateway rate limit reached"}, 429, headers={"Retry-After":"60"})
             arrivals.append(now)
-        response = await call_next(request)
+        try: response = await call_next(request)
+        finally: operation_queries.reset(token)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers.setdefault("Cache-Control", "private, no-store")
         metrics["api_response_bytes"] += int(response.headers.get("content-length","0"))
@@ -108,7 +127,9 @@ def create_app(settings=None):
         cache.invalidate()
         return value
     @app.get("/api/health")
-    def health(): return {"status":"ok","mode":"local-first","persistence":"shared-configuration-only"}
+    def health():
+        import os
+        return {"status":"ok","mode":"local-first","persistence":"shared-configuration-only","api_contract":"local-first-v2","deployment_revision":os.getenv("RAILWAY_GIT_COMMIT_SHA","unknown"),"pipeline_mutations_public":settings.pipeline_mutations_public}
     @app.get("/api/upload-config")
     def upload_config(): return {"max_upload_mb":settings.max_upload_mb,"pdf_render_dpi":settings.pdf_render_dpi}
     @app.get("/api/config/version")
@@ -124,6 +145,21 @@ def create_app(settings=None):
     def create_model(data: OCRModelInput): return mutate(lambda s: model_json(DynamicPipelineService(s).save_model(data)))
     @app.put("/api/pipelines/models/{model_id}", dependencies=[Depends(pipeline_editor)])
     def update_model(model_id: str, data: OCRModelInput): return mutate(lambda s: model_json(DynamicPipelineService(s).save_model(data, model_id)))
+    @app.get("/api/pipelines/{pipeline_id}")
+    def one_pipeline(pipeline_id: str, request: Request):
+        snapshot=cache.get()
+        value=next((p for p in snapshot.public_configs if p["pipeline_id"]==pipeline_id),None)
+        if value is None: raise AppError("Pipeline not found",404)
+        return conditional(request,value,snapshot)
+    @app.put("/api/pipelines/{pipeline_id}", dependencies=[Depends(pipeline_editor)])
+    def toggle_pipeline(pipeline_id: str, data: PipelineToggle):
+        def change(session):
+            config=session.scalar(select(PipelineConfig).where(PipelineConfig.pipeline_id==pipeline_id))
+            if config is None: raise AppError("Pipeline not found",404)
+            config.enabled=data.enabled
+            session.flush()
+            return config_json(config,settings)
+        return mutate(change)
     @app.post("/api/pipelines", dependencies=[Depends(pipeline_editor)], status_code=201)
     def create_pipeline(data: DynamicPipelineInput): return mutate(lambda s: config_json(DynamicPipelineService(s).save_pipeline(data), settings))
     @app.put("/api/pipelines/{pipeline_id}/definition", dependencies=[Depends(pipeline_editor)])
@@ -157,15 +193,26 @@ def create_app(settings=None):
         except TimeoutError: raise AppError("OCR gateway is busy; retry later", 429)
         try:
             png, _, _, _ = await image(file, page_number)
-            before = database.metrics["queries"]
+            counter=operation_queries.get() or {"queries":0}
+            before = counter["queries"]
             snapshot = await run_in_threadpool(cache.get)
             result = await execute(png, data, snapshot, settings)
             metrics["ocr_runs"] += 1
-            metrics["ocr_db_queries"] += database.metrics["queries"] - before
+            metrics["ocr_db_queries"] += counter["queries"] - before
             return result
         finally: semaphore.release()
     @app.get("/api/admin/metrics", dependencies=[Depends(administrator)])
-    def counters(): return {**database.metrics,**cache.metrics,**metrics,"byte_estimate_scope":"serialized config payload only; excludes protocol/TLS/query overhead; not Neon billing","warning_thresholds_mb":settings.transfer_warning_mb}
+    def counters():
+        estimated_bytes=cache.metrics["estimated_config_bytes"] + cache.metrics["misses"]*8
+        observed_seconds=max(monotonic()-started,1)
+        projected_mb=estimated_bytes/1_000_000/observed_seconds*30*86400
+        thresholds=[int(x.strip()) for x in settings.transfer_warning_mb.split(",")]
+        return {**database.metrics,**cache.metrics,**metrics,"requests_by_endpoint":dict(endpoint_counts),
+            "estimated_observed_config_mb":estimated_bytes/1_000_000,"estimated_monthly_config_mb":projected_mb,
+            "estimate_observation_seconds":observed_seconds,"warning_thresholds_mb":thresholds,
+            "crossed_estimate_thresholds_mb":[x for x in thresholds if projected_mb>=x],
+            "byte_estimate_scope":"lower-bound serialized config/revision only; short-run linear projection; excludes protocol/TLS/pool and mutation overhead; not Neon billing"}
+
     @app.post("/api/ocr/calculate")
     def calculation(data: CalculationInput): return calculate(data)
     @app.post("/api/ocr/analyze")
@@ -173,8 +220,8 @@ def create_app(settings=None):
     @app.post("/api/ocr/crop")
     async def crop(file: UploadFile = File(...), options: str = Form(..., max_length=100000), page_number: int = Form(default=1, ge=1)):
         from app.schemas.contracts import ROI
-        import json
-        raw = json.loads(options)
+        from pydantic import TypeAdapter
+        raw = TypeAdapter(dict).validate_json(options)
         roi = ROI.model_validate(raw["roi"]).model_dump() if raw.get("roi") else None
         png, _, _, _ = await image(file, page_number)
         images = ImageService(settings)
@@ -199,4 +246,7 @@ def create_app(settings=None):
         if not settings.api_key(pipeline_id): return {"status":"missing_key","message":"Configure LOCAL_MODEL_GATEWAY_API_KEY first"}
         status = await ModelGatewayClient(settings).status()
         return {"status":"gateway_connected" if status["gateway"] == "connected" else "unavailable","message":"Run OCR to verify the selected model"}
-    return app
+    return CorsGateway(app, allow_origins=[x.strip() for x in settings.cors_origins.split(",")],
+        allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],
+        allow_headers=["Content-Type","Authorization","If-None-Match"],
+        expose_headers=["ETag","X-Config-Revision","X-Image-Width","X-Image-Height","X-Page-Count"])

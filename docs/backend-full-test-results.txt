@@ -1,0 +1,419 @@
+.....................FFFFFF.F........................F......F.F......... [ 24%]
+.FFF.................................s.................................F [ 48%]
+..F..........FFFFF.s...............FFFFFFFF.FFFFFFF.F.FFs......FF....... [ 73%]
+.........s..................................F...........FF.s...FF.FFF... [ 97%]
+....FFF                                                                  [100%]
+================================== FAILURES ===================================
+________________ test_http_fixture_workflow_and_metrics_update ________________
+backend\tests\test_api.py:92: in test_http_fixture_workflow_and_metrics_update
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________________ test_no_ground_truth_and_empty_ground_truth _________________
+backend\tests\test_api.py:114: in test_no_ground_truth_and_empty_ground_truth
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_______________ test_matrix_latest_runs_filters_and_categories ________________
+backend\tests\test_api.py:124: in test_matrix_latest_runs_filters_and_categories
+    run(client, case)
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________________ test_failure_isolation_real_mode_and_trace __________________
+backend\tests\test_api.py:161: in test_failure_isolation_real_mode_and_trace
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+__________________ test_config_validation_and_secret_status ___________________
+backend\tests\test_api.py:181: in test_config_validation_and_secret_status
+    assert client.put("/api/pipelines/mint", json=values).status_code == 422
+E   AssertionError: assert 404 == 422
+E    +  where 404 = <Response [404 Not Found]>.status_code
+E    +    where <Response [404 Not Found]> = put('/api/pipelines/mint', json={'engine': 'paddle'})
+E    +      where put = <starlette.testclient.TestClient object at 0x00000145FAEA3FB0>.put
+__________________ test_roi_changes_preserve_old_predictions __________________
+backend\tests\test_api.py:187: in test_roi_changes_preserve_old_predictions
+    run(client, case)
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+________________ test_auto_roi_and_failure_do_not_block_manual ________________
+backend\tests\test_api.py:252: in test_auto_roi_and_failure_do_not_block_manual
+    assert [item["status"] for item in run(client, case)] == ["success", "success", "success"]
+                                       ^^^^^^^^^^^^^^^^^
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+------------------------------ Captured log call ------------------------------
+ERROR    ocrtest.runtime:log_service.py:57 event=auto_roi_error code=None pipeline=None request=None duration_ms=None
+_____________ test_batch_order_failure_independence_and_safe_logs _____________
+backend\tests\test_batch_logs_delete.py:84: in test_batch_order_failure_independence_and_safe_logs
+    assert result.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+__________ test_delete_cascades_preserves_shared_document_and_audit ___________
+backend\tests\test_batch_logs_delete.py:129: in test_delete_cascades_preserves_shared_document_and_audit
+    assert session.scalar(select(func.count()).select_from(Metric)) > 0
+E   assert 0 > 0
+E    +  where 0 = scalar(<sqlalchemy.sql.selectable.Select object at 0x00000145FB05A030>)
+E    +    where scalar = <sqlalchemy.orm.session.Session object at 0x00000145FAC89EE0>.scalar
+E    +    and   <sqlalchemy.sql.selectable.Select object at 0x00000145FB05A030> = select_from(Metric)
+E    +      where select_from = <sqlalchemy.sql.selectable.Select object at 0x00000145FB05AC60>.select_from
+E    +        where <sqlalchemy.sql.selectable.Select object at 0x00000145FB05AC60> = select(<sqlalchemy.sql.functions.count at 0x145fb0724b0; count>)
+E    +          where <sqlalchemy.sql.functions.count at 0x145fb0724b0; count> = <sqlalchemy.sql.functions._FunctionGenerator object at 0x00000145FAC89130>()
+E    +            where <sqlalchemy.sql.functions._FunctionGenerator object at 0x00000145FAC89130> = func.count
+_______ test_log_never_accepts_secret_identifiers_or_arbitrary_payload ________
+backend\tests\test_batch_logs_delete.py:170: in test_log_never_accepts_secret_identifiers_or_arbitrary_payload
+    assert body["items"][0]["request_id"] is None
+           ^^^^^^^^^^^^^^^^
+E   IndexError: list index out of range
+------------------------------ Captured log call ------------------------------
+ERROR    ocrtest.runtime:log_service.py:57 event=ocr_run_error code=MODEL_UNAVAILABLE pipeline=None request=None duration_ms=None
+_____ test_benchmark_persistence_metrics_error_analysis_and_dynamic_views _____
+backend\tests\test_benchmark_pipeline.py:182: in test_benchmark_persistence_metrics_error_analysis_and_dynamic_views
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________ test_benchmark_failure_isolated_from_existing_pipelines ___________
+backend\tests\test_benchmark_pipeline.py:217: in test_benchmark_failure_isolated_from_existing_pipelines
+    runs = client.post(
+E   KeyError: 'runs'
+_______________ test_additive_seed_and_fixed_benchmark_settings _______________
+backend\tests\test_benchmark_pipeline.py:230: in test_additive_seed_and_fixed_benchmark_settings
+    mint.enabled = False
+    ^^^^^^^^^^^^
+E   AttributeError: 'NoneType' object has no attribute 'enabled'
+_______ test_error_replacement_filters_latest_and_historical_recompute ________
+backend\tests\test_error_analysis_dataset.py:67: in test_error_replacement_filters_latest_and_historical_recompute
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_api.py:18: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________ test_future_config_is_iterable_without_invented_adapter ___________
+backend\tests\test_error_analysis_dataset.py:202: in test_future_config_is_iterable_without_invented_adapter
+    assert len(client.get("/api/pipelines").json()) == count + 1
+E   AssertionError: assert 0 == (0 + 1)
+E    +  where 0 = len([])
+E    +    where [] = json()
+E    +      where json = <Response [200 OK]>.json
+E    +        where <Response [200 OK]> = get('/api/pipelines')
+E    +          where get = <starlette.testclient.TestClient object at 0x00000145FB05B170>.get
+________ test_fields_lifecycle_scoping_preview_replacement_and_history ________
+backend\tests\test_fields_roi.py:67: in test_fields_lifecycle_scoping_preview_replacement_and_history
+    runs = client.post(
+E   KeyError: 'runs'
+_______________ test_explicit_roi_origin_pipeline_inputs[auto] ________________
+backend\tests\test_fields_roi.py:118: in test_explicit_roi_origin_pipeline_inputs
+    runs = client.post(
+E   KeyError: 'runs'
+______________ test_explicit_roi_origin_pipeline_inputs[manual] _______________
+backend\tests\test_fields_roi.py:118: in test_explicit_roi_origin_pipeline_inputs
+    runs = client.post(
+E   KeyError: 'runs'
+_______________ test_explicit_roi_origin_pipeline_inputs[none] ________________
+backend\tests\test_fields_roi.py:118: in test_explicit_roi_origin_pipeline_inputs
+    runs = client.post(
+E   KeyError: 'runs'
+_______________ test_roi_source_validation_and_no_roi_full_page _______________
+backend\tests\test_fields_roi.py:154: in test_roi_source_validation_and_no_roi_full_page
+    run = client.post(
+E   KeyError: 'runs'
+_______ test_synchronized_gt_requires_all_fields_and_matching_document ________
+backend\tests\test_global_layout.py:21: in test_synchronized_gt_requires_all_fields_and_matching_document
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______ test_smart_calculation_data_presence_and_persistence[True-False] _______
+backend\tests\test_global_layout.py:40: in test_smart_calculation_data_presence_and_persistence
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______ test_smart_calculation_data_presence_and_persistence[False-True] _______
+backend\tests\test_global_layout.py:40: in test_smart_calculation_data_presence_and_persistence
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_______ test_smart_calculation_data_presence_and_persistence[True-True] _______
+backend\tests\test_global_layout.py:40: in test_smart_calculation_data_presence_and_persistence
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______ test_smart_calculation_data_presence_and_persistence[False-False] ______
+backend\tests\test_global_layout.py:40: in test_smart_calculation_data_presence_and_persistence
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________ test_layout_identity_confirmation_history_and_crop_fairness _________
+backend\tests\test_global_layout.py:112: in test_layout_identity_confirmation_history_and_crop_fairness
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_ test_shared_gt_explicit_evaluation_persistence_and_invalidation[per_field] __
+backend\tests\test_global_layout.py:151: in test_shared_gt_explicit_evaluation_persistence_and_invalidation
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+____ test_field_dataset_exact_source_crop_confirmed_gt_and_missing_source _____
+backend\tests\test_global_layout.py:206: in test_field_dataset_exact_source_crop_confirmed_gt_and_missing_source
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______ test_detector_order_is_not_global_identity_and_failure_isolation _______
+backend\tests\test_global_layout.py:294: in test_detector_order_is_not_global_identity_and_failure_isolation
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______________ test_field_alignment[per_field-ABXD-substitution] ______________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+________________ test_field_alignment[per_field-ABD-insertion] ________________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_______________ test_field_alignment[per_field-ABXCD-deletion] ________________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________ test_field_alignment[whole_document-ABXD-substitution] ____________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_____________ test_field_alignment[whole_document-ABD-insertion] ______________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_____________ test_field_alignment[whole_document-ABXCD-deletion] _____________
+backend\tests\test_global_layout.py:313: in test_field_alignment
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+__________ test_geometry_order_reorder_identity_and_historical_lock ___________
+backend\tests\test_global_layout.py:362: in test_geometry_order_reorder_identity_and_historical_lock
+    assert client.post(root + "/run", json={"pipelines": ["mint"]}).status_code == 200
+E   AssertionError: assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+E    +    where <Response [404 Not Found]> = post(('/api/test-cases/9e230945-a8e7-4f85-9925-ee4554d5b0e1' + '/run'), json={'pipelines': ['mint']})
+E    +      where post = <starlette.testclient.TestClient object at 0x00000145821CEFF0>.post
+_ test_whole_document_explicit_evaluation_invalidation_and_no_dataset_labels __
+backend\tests\test_global_layout.py:383: in test_whole_document_explicit_evaluation_invalidation_and_no_dataset_labels
+    runs = run(client, case)
+           ^^^^^^^^^^^^^^^^^
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_ test_field_edit_invalidates_only_its_evaluation_and_modes_remain_independent _
+backend\tests\test_global_layout.py:420: in test_field_edit_invalidates_only_its_evaluation_and_modes_remain_independent
+    run(client, case)
+backend\tests\test_global_layout.py:88: in run
+    assert response.status_code == 200, response.text
+E   AssertionError: {"detail":"Pipeline not found"}
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______ test_global_identity_order_shared_gt_history_and_partial_failure _______
+backend\tests\test_hutch_fine_tune_v2.py:70: in test_global_identity_order_shared_gt_history_and_partial_failure
+    assert result.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_______________ test_registration_fixed_route_unknown_readiness _______________
+backend\tests\test_hutch_fine_tune_v2.py:100: in test_registration_fixed_route_unknown_readiness
+    config = next(c for c in client.get("/api/pipelines").json() if c["pipeline_id"] == SLUG)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   StopIteration
+_______ test_pdf_page_roi_persistence_and_three_real_adapter_contracts ________
+backend\tests\test_pdf.py:89: in test_pdf_page_roi_persistence_and_three_real_adapter_contracts
+    runs = client.post(f"/api/test-cases/{case['id']}/run", json={"pipelines": pipelines}).json()[
+E   KeyError: 'runs'
+________ test_private_upstream_fields_never_reach_storage_or_frontend _________
+backend\tests\test_privacy_and_database.py:30: in test_private_upstream_fields_never_reach_storage_or_frontend
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_________________ test_bad_metadata_cannot_cancel_other_runs __________________
+backend\tests\test_privacy_and_database.py:53: in test_bad_metadata_cannot_cancel_other_runs
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+____________________ test_missing_key_has_no_fake_fallback ____________________
+backend\tests\test_real_boundaries.py:41: in test_missing_key_has_no_fake_fallback
+    assert {r["error_code"] for r in result["runs"]} == {"MISSING_GATEWAY_KEY"}
+                                     ^^^^^^^^^^^^^^
+E   KeyError: 'runs'
+____________ test_archived_history_excluded_without_deleting_data _____________
+backend\tests\test_real_boundaries.py:57: in test_archived_history_excluded_without_deleting_data
+    assert all(c["test_cases"] == 0 for c in client.get("/api/analytics/categories").json())
+E   assert False
+E    +  where False = all(<generator object test_archived_history_excluded_without_deleting_data.<locals>.<genexpr> at 0x0000014582EAF510>)
+________________ test_one_shared_key_and_boolean_only_status[] ________________
+backend\tests\test_real_boundaries.py:83: in test_one_shared_key_and_boolean_only_status
+    assert data["api_key_configured"] is bool(shared_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'api_key_configured'
+__ test_one_shared_key_and_boolean_only_status[shared-test-only-credential] ___
+backend\tests\test_real_boundaries.py:83: in test_one_shared_key_and_boolean_only_status
+    assert data["api_key_configured"] is bool(shared_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'api_key_configured'
+______________ test_shared_gateway_ignores_stale_pipeline_hosts _______________
+backend\tests\test_real_boundaries.py:112: in test_shared_gateway_ignores_stale_pipeline_hosts
+    assert gateway[1]
+E   assert []
+_____________ test_roi_fields_persistence_and_dynamic_views[auto] _____________
+backend\tests\test_thai_ft_v2.py:142: in test_roi_fields_persistence_and_dynamic_views
+    ids = list(PipelineManager.adapter_classes)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'PipelineManager' has no attribute 'adapter_classes'
+____________ test_roi_fields_persistence_and_dynamic_views[manual] ____________
+backend\tests\test_thai_ft_v2.py:142: in test_roi_fields_persistence_and_dynamic_views
+    ids = list(PipelineManager.adapter_classes)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: type object 'PipelineManager' has no attribute 'adapter_classes'
+___________ test_registration_fixed_settings_and_unknown_readiness ____________
+backend\tests\test_thai_ft_v2.py:173: in test_registration_fixed_settings_and_unknown_readiness
+    assert {c["pipeline_id"] for c in configs} == {"mint", "hutch_crop", "hutch_full", "benchmark", "thai_ft_v2", "hutch_fine_tune_v2"}
+E   AssertionError: assert set() == {'benchmark',... 'thai_ft_v2'}
+E     
+E     Extra items in the right set:
+E     'benchmark'
+E     'hutch_fine_tune_v2'
+E     'hutch_crop'
+E     'hutch_full'
+E     'thai_ft_v2'
+E     'mint'
+E     Use -v to get more diff
+============================== warnings summary ===============================
+backend\.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\66160167\Desktop\ocrtest-main\testocrlocal\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED backend\tests\test_api.py::test_http_fixture_workflow_and_metrics_update
+FAILED backend\tests\test_api.py::test_no_ground_truth_and_empty_ground_truth
+FAILED backend\tests\test_api.py::test_matrix_latest_runs_filters_and_categories
+FAILED backend\tests\test_api.py::test_failure_isolation_real_mode_and_trace
+FAILED backend\tests\test_api.py::test_config_validation_and_secret_status - ...
+FAILED backend\tests\test_api.py::test_roi_changes_preserve_old_predictions
+FAILED backend\tests\test_api.py::test_auto_roi_and_failure_do_not_block_manual
+FAILED backend\tests\test_batch_logs_delete.py::test_batch_order_failure_independence_and_safe_logs
+FAILED backend\tests\test_batch_logs_delete.py::test_delete_cascades_preserves_shared_document_and_audit
+FAILED backend\tests\test_batch_logs_delete.py::test_log_never_accepts_secret_identifiers_or_arbitrary_payload
+FAILED backend\tests\test_benchmark_pipeline.py::test_benchmark_persistence_metrics_error_analysis_and_dynamic_views
+FAILED backend\tests\test_benchmark_pipeline.py::test_benchmark_failure_isolated_from_existing_pipelines
+FAILED backend\tests\test_benchmark_pipeline.py::test_additive_seed_and_fixed_benchmark_settings
+FAILED backend\tests\test_error_analysis_dataset.py::test_error_replacement_filters_latest_and_historical_recompute
+FAILED backend\tests\test_error_analysis_dataset.py::test_future_config_is_iterable_without_invented_adapter
+FAILED backend\tests\test_fields_roi.py::test_fields_lifecycle_scoping_preview_replacement_and_history
+FAILED backend\tests\test_fields_roi.py::test_explicit_roi_origin_pipeline_inputs[auto]
+FAILED backend\tests\test_fields_roi.py::test_explicit_roi_origin_pipeline_inputs[manual]
+FAILED backend\tests\test_fields_roi.py::test_explicit_roi_origin_pipeline_inputs[none]
+FAILED backend\tests\test_fields_roi.py::test_roi_source_validation_and_no_roi_full_page
+FAILED backend\tests\test_global_layout.py::test_synchronized_gt_requires_all_fields_and_matching_document
+FAILED backend\tests\test_global_layout.py::test_smart_calculation_data_presence_and_persistence[True-False]
+FAILED backend\tests\test_global_layout.py::test_smart_calculation_data_presence_and_persistence[False-True]
+FAILED backend\tests\test_global_layout.py::test_smart_calculation_data_presence_and_persistence[True-True]
+FAILED backend\tests\test_global_layout.py::test_smart_calculation_data_presence_and_persistence[False-False]
+FAILED backend\tests\test_global_layout.py::test_layout_identity_confirmation_history_and_crop_fairness
+FAILED backend\tests\test_global_layout.py::test_shared_gt_explicit_evaluation_persistence_and_invalidation[per_field]
+FAILED backend\tests\test_global_layout.py::test_field_dataset_exact_source_crop_confirmed_gt_and_missing_source
+FAILED backend\tests\test_global_layout.py::test_detector_order_is_not_global_identity_and_failure_isolation
+FAILED backend\tests\test_global_layout.py::test_field_alignment[per_field-ABXD-substitution]
+FAILED backend\tests\test_global_layout.py::test_field_alignment[per_field-ABD-insertion]
+FAILED backend\tests\test_global_layout.py::test_field_alignment[per_field-ABXCD-deletion]
+FAILED backend\tests\test_global_layout.py::test_field_alignment[whole_document-ABXD-substitution]
+FAILED backend\tests\test_global_layout.py::test_field_alignment[whole_document-ABD-insertion]
+FAILED backend\tests\test_global_layout.py::test_field_alignment[whole_document-ABXCD-deletion]
+FAILED backend\tests\test_global_layout.py::test_geometry_order_reorder_identity_and_historical_lock
+FAILED backend\tests\test_global_layout.py::test_whole_document_explicit_evaluation_invalidation_and_no_dataset_labels
+FAILED backend\tests\test_global_layout.py::test_field_edit_invalidates_only_its_evaluation_and_modes_remain_independent
+FAILED backend\tests\test_hutch_fine_tune_v2.py::test_global_identity_order_shared_gt_history_and_partial_failure
+FAILED backend\tests\test_hutch_fine_tune_v2.py::test_registration_fixed_route_unknown_readiness
+FAILED backend\tests\test_pdf.py::test_pdf_page_roi_persistence_and_three_real_adapter_contracts
+FAILED backend\tests\test_privacy_and_database.py::test_private_upstream_fields_never_reach_storage_or_frontend
+FAILED backend\tests\test_privacy_and_database.py::test_bad_metadata_cannot_cancel_other_runs
+FAILED backend\tests\test_real_boundaries.py::test_missing_key_has_no_fake_fallback
+FAILED backend\tests\test_real_boundaries.py::test_archived_history_excluded_without_deleting_data
+FAILED backend\tests\test_real_boundaries.py::test_one_shared_key_and_boolean_only_status[]
+FAILED backend\tests\test_real_boundaries.py::test_one_shared_key_and_boolean_only_status[shared-test-only-credential]
+FAILED backend\tests\test_real_boundaries.py::test_shared_gateway_ignores_stale_pipeline_hosts
+FAILED backend\tests\test_thai_ft_v2.py::test_roi_fields_persistence_and_dynamic_views[auto]
+FAILED backend\tests\test_thai_ft_v2.py::test_roi_fields_persistence_and_dynamic_views[manual]
+FAILED backend\tests\test_thai_ft_v2.py::test_registration_fixed_settings_and_unknown_readiness
+51 failed, 239 passed, 5 skipped, 1 warning in 45.13s

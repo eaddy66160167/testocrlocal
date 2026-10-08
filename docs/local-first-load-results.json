@@ -1,0 +1,72 @@
+{
+  "environment": "in-process TestClient; SQLite configuration; synthetic OCR HTTP transport; NOT Neon billing or deployed latency",
+  "workloads": [
+    {
+      "concurrency": 1,
+      "runs": 100,
+      "queries": 0,
+      "errors": 0,
+      "wall_seconds": 0.3671545999823138,
+      "p50_ms": 3.640650014858693,
+      "p95_ms": 4.760900046676397,
+      "cache_hits": 100,
+      "new_connections": 0
+    },
+    {
+      "concurrency": 5,
+      "runs": 100,
+      "queries": 0,
+      "errors": 0,
+      "wall_seconds": 0.3032464999705553,
+      "p50_ms": 14.322900009574369,
+      "p95_ms": 21.074599993880838,
+      "cache_hits": 100,
+      "new_connections": 0
+    },
+    {
+      "concurrency": 10,
+      "runs": 100,
+      "queries": 0,
+      "errors": 0,
+      "wall_seconds": 0.2620805000187829,
+      "p50_ms": 25.95684997504577,
+      "p95_ms": 30.751499987673014,
+      "cache_hits": 100,
+      "new_connections": 0
+    }
+  ],
+  "unchanged_expired_cache_queries": 1,
+  "metrics": {
+    "queries": 33,
+    "connections_opened": 1,
+    "sql_duration_ms": 24.92329984670505,
+    "hits": 400,
+    "misses": 4,
+    "estimated_config_bytes": 1485,
+    "ocr_runs": 300,
+    "ocr_db_queries": 0,
+    "api_response_bytes": 1047643,
+    "rate_rejections": 0,
+    "requests_by_endpoint": {
+      "POST /api/pipelines": 1,
+      "GET /api/pipelines": 101,
+      "POST /api/ocr/execute": 300,
+      "PUT /api/pipelines/:id": 1,
+      "GET /api/admin/metrics": 1
+    },
+    "estimated_observed_config_mb": 0.001517,
+    "estimated_monthly_config_mb": 3597.496797825666,
+    "estimate_observation_seconds": 1.0929999999934807,
+    "warning_thresholds_mb": [
+      250,
+      400,
+      500
+    ],
+    "crossed_estimate_thresholds_mb": [
+      250,
+      400,
+      500
+    ],
+    "byte_estimate_scope": "lower-bound serialized config/revision only; short-run linear projection; excludes protocol/TLS/pool and mutation overhead; not Neon billing"
+  }
+}

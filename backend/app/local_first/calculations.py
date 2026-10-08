@@ -1,29 +1,66 @@
-﻿"""Stateless calculations on browser snapshots. No session or storage is created."""
+"""Stateless calculations on browser snapshots. No session or storage is created."""
 from datetime import datetime
 from types import SimpleNamespace
-from pydantic import Field
+from pydantic import Field, BaseModel
+from typing import Literal
+from uuid import UUID
 from app.core.errors import AppError
 from app.db.models import Category, Document, DocumentType, GlobalField, Metric, OCRField, PipelineRun, TestCase, now
 from app.local_first.execution import TransientRepository
-from app.schemas.contracts import InputModel, GlobalEvaluation, GroundTruthUpdate, BenchmarkFilters
+from app.schemas.contracts import InputModel, GlobalEvaluation, GroundTruthUpdate, BenchmarkFilters, ErrorFilters
 from app.services.field_service import compare_field
 from app.services.global_layout_service import GlobalLayoutService
 from app.services.matrix_service import MatrixService
 from app.services.serializers import test_case_json
 from app.services.test_case_service import TestCaseService
 
+class SnapshotDocument(BaseModel):
+    model_config = {"extra":"allow"}
+    id: UUID
+    filename: str = Field(max_length=255, strict=True)
+    width: int = Field(gt=0, strict=True)
+    height: int = Field(gt=0, strict=True)
+    created_at: datetime
+
+class SnapshotRun(BaseModel):
+    model_config = {"extra":"allow"}
+    id: UUID
+    pipeline_id: str = Field(max_length=100, strict=True)
+    status: str = Field(max_length=30, strict=True)
+    created_at: datetime
+    final_text: str | None = Field(default=None,max_length=100000,strict=True)
+    raw_text: str | None = Field(default=None,max_length=100000,strict=True)
+    fields: list[dict] = Field(default_factory=list,max_length=1000)
+    boxes: list[dict] = Field(default_factory=list,max_length=5000)
+
+class SnapshotCase(BaseModel):
+    model_config = {"extra":"allow"}
+    id: UUID
+    document_id: UUID
+    document: SnapshotDocument
+    workflow: Literal["legacy","global"] = "legacy"
+    created_at: datetime
+    updated_at: datetime
+    ground_truth_raw: str | None = Field(default=None,max_length=100000,strict=True)
+    runs: list[SnapshotRun] = Field(default_factory=list,max_length=1000)
+    global_fields: list[dict] = Field(default_factory=list,max_length=200)
+    categories: list[dict] = Field(default_factory=list,max_length=100)
+
 class CalculationInput(InputModel):
     operation: str = Field(max_length=100)
-    case: dict
+    case: SnapshotCase
     value: dict = Field(default_factory=dict)
 
 class AnalysisInput(InputModel):
     operation: str = Field(max_length=100)
-    cases: list[dict] = Field(max_length=2000)
+    cases: list[SnapshotCase] = Field(max_length=2000)
     configs: list[dict] = Field(max_length=100)
     document_types: list[dict] = Field(default_factory=list, max_length=1000)
     filters: BenchmarkFilters = Field(default_factory=BenchmarkFilters)
     include_archived: bool = False
+    error_filters: ErrorFilters = Field(default_factory=ErrorFilters)
+    limit: int = Field(default=50,ge=1,le=200)
+    offset: int = Field(default=0,ge=0)
 
 def value_object(cls, data):
     obj = cls()
@@ -38,6 +75,7 @@ def value_object(cls, data):
     return obj
 
 def hydrate(data):
+    if isinstance(data,SnapshotCase): data=data.model_dump(mode="json")
     case = value_object(TestCase, data)
     case.workflow = data.get("workflow", "legacy")
     case.evaluation_mode = data.get("evaluation_mode", "per_field")
@@ -81,6 +119,10 @@ def calculate(data):
         field.ground_truth_raw = gt.ground_truth_raw; field.ground_truth_normalized = normalize_text(gt.ground_truth_raw)
         field.confirmed_at = now() if gt.confirmed else None
         field.evaluation = compare_field(field.ocr_text, gt.ground_truth_raw) if gt.confirmed else None
+    elif data.operation == "recompute":
+        if case.workflow == "global": raise AppError("Use explicit Global Layout evaluation for this case",409)
+        for run in case.runs:
+            if not run.archived: TestCaseService.evaluate(run,case.ground_truth_raw)
     else: raise AppError("Unknown local calculation", 422)
     return test_case_json(case, detail=True)
 
@@ -104,6 +146,9 @@ class MemoryRepository:
 
 def analyze(data):
     service = MatrixService.__new__(MatrixService); service.repository = MemoryRepository(data); service._configs = None
+    if data.operation == "errors":
+        from app.repositories.error_repository import aggregate_errors
+        return aggregate_errors(service,data.error_filters,data.limit,data.offset)
     if data.operation == "matrix": return service.matrix(data.filters)
     if data.operation == "summary": return service.summary(data.filters)
     if data.operation == "pipelines": return service.options()

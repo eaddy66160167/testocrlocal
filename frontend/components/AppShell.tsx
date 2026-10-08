@@ -81,6 +81,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Settings2 size={18} />
             Pipeline
           </Link>
+          <Link href="/settings/local" className={`nav-link ${pathname === "/settings/local" ? "active" : ""}`} onClick={() => setOpen(false)}>
+            <BookOpen size={18}/> ????????????????????
+          </Link>
         </nav>
         <div className="sidebar-footer">
           <span className="muted">OCR Evaluation Console</span>
@@ -98,7 +101,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
             <strong>{section}</strong>
-          </nav>
+            <Link href="/settings/local" className={`nav-link ${pathname === "/settings/local" ? "active" : ""}`} onClick={() => setOpen(false)}>
+            <BookOpen size={18}/> ????????????????????
+          </Link>
+        </nav>
         </div>
         <main id="main-content">{children}</main>
       </div>
