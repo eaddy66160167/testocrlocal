@@ -139,3 +139,17 @@ Both view tabs share saved-test CER highlighting. Only latest successful results
 Validation: typecheck, ESLint and production build **PASS**; relevant Playwright **70/70 PASS** (History, Comparison, dynamic pipelines, Global comparison/selection, GT sync, error lines and bulk History/Dataset); focused backend comparison/analytics **35 PASS**, with two existing dependency deprecations. Full backend and Ruff were not rerun, as requested; unrelated upstream failures are not claimed fixed. Browser tests use deterministic intercepted API fixtures, not a live PostgreSQL end-to-end stack.
 
 Backend, API contracts/types, OCR ordering, batch splitting, evaluation, storage, migrations, secrets and deployment configuration are unchanged. No production deployment or merge is part of this pass.
+
+## Canonical Compare Results alignment — 2026-10-07
+
+Base: merged `origin/main` at `27ae30d8a65689ea6569911003474c5579e0ab90`. New branch: `fix/comparison-alignment-colors`. The pending chart fix `edf1269e` was cherry-picked as a separate commit (`0a28e6b`); guide/Pareto behavior is unchanged by the alignment work. Divergent local main/backup work was preserved by branching directly from origin/main.
+
+Each Pipeline card now renders its own GT/OCR rows from the same canonical backend spans. Correct is green, substitution red with underline and both GT/OCR values in accessible descriptions, insertion rose with a small GT gap, deletion amber with the OCR missing-text marker. Shared presentation and codepoint counts drive the cards, legend and Error Analysis; zero categories remain visible but quieter. Counts do not calculate CER. The common GT reference, metric scopes and backend CER above 100% remain unchanged.
+
+Compact History evaluations show a loading message while rich detail is fetched. Current detail remains authoritative, including invalidated eligibility. A genuinely unavailable alignment after detail loading stays neutral and preserves stored CER without manufactured spans/counts. No backend changes or independent diff algorithm were needed: inspected serializers already reconstruct rich detail with `compare_field`.
+
+Visual QA captures for exact match, substitution, insertion-heavy (CER 2800%), deletion and mixed all-four are in ignored `.runtime/alignment-review/{exact,substitution,insertion,deletion,mixed}-{1440,390}.png`. Desktop retains Original/GT/A/B layout; mobile stacks the same cards. Thai text, gap/missing markers and count chips wrap without page overflow. Colors match the shared legend; text/symbols/accessible descriptions distinguish kinds beyond color. Font, spacing, copy, color and existing assets were reviewed; no page redesign or new image asset was introduced.
+
+Validation: typecheck, ESLint and production build PASS; relevant Playwright 85/85 PASS, including rich-detail hydration, unavailable alignment, per-pipeline independence, all-four/zero counts, Unicode codepoints, Error Analysis tabs/line ownership and prior chart/default-scope/minimum-CER regression checks. Focused canonical field/compact-metrics backend tests: 13 PASS (two dependency deprecations). Browser tests intercept API fixtures; live database/Gateway or production testing is not claimed. Legacy API-dependent Field/Thai FT test assertions were updated to semantic shared classes but those separate live-server suites were not run.
+
+Git diff/private-value secret checks PASS; `.env` ignored/untracked. Delivery is normal feature-branch push plus a new PR to main only; no force push, merge, deployment or production database changes.

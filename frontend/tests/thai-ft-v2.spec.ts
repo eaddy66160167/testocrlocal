@@ -43,7 +43,7 @@ test("legacy compatibility: Thai FT v2 fifth pipeline supports Auto/Manual ROI, 
   await field.getByRole("button", { name: "Field 01", exact: true }).click();
   await field.getByLabel("GT Field 1", { exact: true }).fill("ภาษาไทย");
   for (let i = 0; i < 2; i++) await field.getByRole("button", { name: "ตรวจ", exact: true }).click();
-  await expect(field.getByTestId("field-error").first()).toHaveClass(/text-red-700/);
+  await expect(field.getByTestId("field-error").first()).toHaveClass(/comparison-span (substitution|insertion|deletion)/);
   const before = await (await request.get(`${backend}/api/test-cases/${result.test_case_id}`)).json();
   expect(before.runs[0].fields[0].ground_truth_raw).toBeNull();
   await field.getByRole("button", { name: "ยืนยัน GT Field", exact: true }).click();

@@ -46,7 +46,7 @@ test("legacy compatibility: default field GT uses Check preview, accessible red 
     if (kind === "equal") await expect(field.getByTestId("field-error")).toHaveCount(0);
     else {
       const mark = field.locator(`[data-error-type="${kind}"]`).first();
-      await expect(mark).toBeVisible(); await expect(mark).toHaveClass(/text-red-700/);
+      await expect(mark).toBeVisible(); await expect(mark).toHaveClass(new RegExp(`comparison-span ${kind}`));
       await expect(mark).toHaveAttribute("aria-label", /อ่าน/);
       if (kind === "deletion") await expect(mark).toHaveText("⟦ขาด: X⟧");
     }
