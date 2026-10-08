@@ -1,0 +1,58 @@
+# สัญญา Model Gateway และหลักฐานจาก source
+
+> Current workflow: [Four-page Global Layout / Whole Field / Sub-fields](global-layout.md) supersedes older ROI/GT descriptions below. New OCR runs use the same app crop for all five pipelines, including Hutch Full. The release uses migration 0008; verify the production revision before deploying. Legacy record descriptions below remain historical compatibility reference.
+
+ตรวจ source วันที่ 10 กันยายน 2026 ก่อนนำโฟลเดอร์อ้างอิงออก เก็บ SHA-256 ของไฟล์สำคัญใน [gateway-contract-evidence.json](gateway-contract-evidence.json) แอปไม่ import หรือเริ่มบริการจาก source นี้
+
+## Endpoint ที่ยืนยันได้
+
+Base URL ที่ได้รับ: `http://107.129.186.30:62051` เรียกจาก FastAPI เท่านั้น
+
+| การใช้งาน | Endpoint/ข้อมูล |
+| --- | --- |
+| Mint | POST `/api/v1/ocr-results?engine=custom`, multipart `image` เป็น PNG crop |
+| Hutch Crop | POST `/api/v1/ocr-results?engine=paddle`, multipart `image` เป็น PNG crop |
+| Hutch Full | POST `/api/v1/ocr-results?engine=paddle`, multipart `image`: Auto/none ใช้ภาพเต็ม; Manual ใช้ crop ภายใน adapter |
+| Benchmark | DET `/api/v1/text-detection-batches?version=6` → REC `/api/v1/text-recognition-batches?version=5`; multipart `images`; ไม่มี model/engine |
+| Thai FT v2 | DET `/api/v1/text-detection-batches?version=6&model=thai_ft_v2` → REC `/api/v1/text-recognition-batches?version=6&model=thai_ft_v2` |
+| Auto ROI | POST `/api/v1/document-layouts`, `image` เป็นภาพเต็มของหน้าที่เลือก, `auto_roi_mode=text-line`, `expand_text_rois=false` |
+| Health | GET `/health` หรือ `/api/v1/health` ไม่ต้อง auth |
+| Readiness | GET `/api/v1/readiness` ต้อง auth เมื่อปลายทางเปิดใช้ ไม่มี alias `/readiness` ที่ยืนยันจาก source |
+
+ทั้งสอง Hutch adapters กำหนด `text_det_unclip_ratio=1.7`, `text_det_thresh=0.25`, `text_det_box_thresh=0.6` ค่า unclip เริ่มต้นใน Paddle source คือ 2.0 จึงห้ามอาศัย default ของปลายทาง
+
+## Hutch Full ตามคำยืนยันเจ้าของ Pipeline
+
+ไฟล์อ้างอิง `services/ocr_pipeline_paddle/main.py` เรียก `parse_image_request(request)` แล้วอ่านเพียงสาม detection fields ก่อน `model().predict(image.path, ...)` ไม่พบการอ่าน ROI หรือ crop ตาม ROI ที่เลือก `shared/api.py` เก็บ arbitrary multipart/JSON fields ได้ แต่ไม่ได้แปลว่า Paddle ใช้ field นั้น ส่วน Gateway เพียง forward image/fields ไป pipeline
+
+Hutch Full ดู `roi_source`: Auto/none ส่งภาพเต็มหรือหน้า PDF เต็ม; Manual สร้าง canonical PNG crop ภายใน adapter แล้วส่ง Paddle ไม่มี ROI wire contract ที่ต้องรอ และไม่ส่งพิกัดแทนภาพ ดู [ROI/Field GT](fields-roi-dataset.md)
+
+## รูปแบบตอบกลับและ tracing
+
+สำเร็จ: `{"data": ..., "meta":{"request_id":"...","duration_ms":123.4,"service":"...","model":"..."}}`
+
+ผิดพลาด: `{"error":{"code":"...","message":"...","request_id":"...","details":[]}}`
+
+แอปสร้าง X-Request-ID ต่อ run ส่งต่อ Gateway และเก็บ upstream ID/เวลา/service/model แยกกัน ไม่อ้าง upstream ID ให้ข้อผิดพลาดที่เกิดก่อนเรียก Gateway ตรวจ envelope/JSON/response size และไม่ retry deterministic HTTP errors ข้อมูล sensitive ใน raw response ถูก redact ก่อน persist
+
+## Authentication และที่มาของ key
+
+source รองรับ Bearer ก่อน X-API-Key และ current/previous keys โดยเปรียบเทียบแบบ constant-time Gateway รับ `MODEL_GATEWAY_API_KEY`; การเรียกบริการภายในใช้ `INTERNAL_API_TOKEN` ซึ่งไม่ใช่ key ที่ต้องให้ benchmark client
+
+`run-service.cmd` ใช้ inherited environment ไม่โหลด key เอง `model-stack.ps1`/`.sh` โหลด `MODEL_ENV_FILE` หรือ `.env.runtime`; Compose interpolate ตัวแปรจาก shell/env ของ deployment ไฟล์ runtime จริงไม่อยู่ใน source ที่ได้รับ มีเพียงค่าตัวอย่าง จึงไม่สามารถอนุมาน key ของ remote runtime ได้ ต้องขอจากเจ้าของบริการ
+
+แอป benchmark เวอร์ชันนี้ต้องมี key สำหรับการส่ง OCR/Auto ROI; หากไม่มี คืน error ชัดเจน ไม่มีการสร้างผลแทน ทั้งนี้ source ภายนอกอาจรองรับ unauthenticated development แต่ไม่ได้ยืนยันว่าระบบปลายทางนี้เปิดใช้
+
+## Topology และ ports ที่ตรวจพบ
+
+Native Gateway 8080 → custom 8005 → DET V5 8002/REC Thai 8004; Paddle integrated 8006 ใช้ PP-OCRv6_medium_det + th_PP-OCRv5_mobile_rec ไม่มี model runtime ใน benchmark
+
+Reference Compose map host 8080 → container 8000; nginx ฟัง 80/443 → 127.0.0.1:8080 ไม่พบ mapping 62051 ใน source จึงยืนยัน topology ของ public port 62051 ภายในระบบปลายทางไม่ได้
+
+## สถานะภายนอก
+
+ผลตรวจย้อนหลังของ integrated OCR อยู่ใน [validation](validation.md); live contract ของ batch endpoints อยู่ใน [Benchmark](benchmark-pipeline.md) และ [Thai FT v2](thai-ft-v2.md) ไม่ถือเป็นหลักฐานว่า deployment ใหม่ผ่านแล้ว และไม่บันทึก key ในเอกสาร
+
+Thai FT v2 เลือก `model_selection.version=v6`, `variant=thai_ft_v2`; `results[*].model` อาจเป็นชื่อ V5 เก่าที่เจ้าของโมเดลยืนยันว่า stale metadata ต้องเก็บตามจริงและไม่ใช้ routing. Readiness ยังไม่ยืนยันสถานะแยกรุ่น DET/REC จึงต้องทดสอบ inference เพื่อยืนยัน
+
+ทุก OCR Pipeline และ Auto ROI ใช้ MODEL_GATEWAY_API_KEY ตัวเดียว ไม่รองรับ secret fallback ราย Pipeline API ส่งเพียง api_key_configured boolean และไม่ส่งค่า/ส่วนของ key ออกไป
