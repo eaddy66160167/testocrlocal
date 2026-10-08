@@ -1,4 +1,4 @@
-﻿# Database network transfer audit
+# Database network transfer audit
 
 ## Scope and evidence
 Source inspection of imported production f9765f6, 2026-10-08. Historical 6.37 GB transfer / 45.58 MB storage are user-reported. No authoritative historical query logs or Neon dashboard were available. The traffic source is not proven.
@@ -23,3 +23,8 @@ Separate binary assets from local metadata. Persist runs/GT/datasets only in Ind
 
 ## Runtime evidence
 Baseline SQLite test suite and frontend build ran; see local-first-baseline.md. Historical PostgreSQL wire bytes, connection churn, deployed request frequency and Neon billing were not measured. Runtime test evidence added in later phases must distinguish application counters from authoritative billing.
+
+
+## Repair verification (2026-10-08)
+
+See `local-first-repair-report.md` and `local-first-load-results.json` for measured synthetic load and live API diagnosis. Warmed OCR (300 runs), cached Pipeline reads (100), browser History navigation (100), transient GT and analytics perform zero SQL in their tested paths. These are SQLite/mock application measurements, not Neon billing. Live test Railway still serves the legacy API contract; no deployed network improvement is claimed.
